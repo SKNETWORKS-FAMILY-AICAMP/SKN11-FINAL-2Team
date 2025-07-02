@@ -178,6 +178,20 @@ class DataValidator:
         
         if not isinstance(total_duration, (int, float)) or total_duration <= 0:
             raise ValueError("course_planning.route_constraints.total_course_duration은 양수여야 합니다.")
+        
+        # sequence_optimization 검증 및 boolean 변환
+        if 'sequence_optimization' in course_planning:
+            seq_opt = course_planning['sequence_optimization']
+            seq_opt_fields = ['allow_reordering', 'prioritize_given_sequence']
+            DataValidator._validate_required_fields(seq_opt, seq_opt_fields, "course_planning.sequence_optimization")
+            
+            # boolean 변환 처리
+            for field in seq_opt_fields:
+                value = seq_opt[field]
+                if isinstance(value, str):
+                    seq_opt[field] = value.lower() in ('true', '1', 'yes', 'on')
+                elif not isinstance(value, bool):
+                    seq_opt[field] = bool(value)
     
     @staticmethod
     def validate_coordinates(lat: float, lon: float) -> bool:
