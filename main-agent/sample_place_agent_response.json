@@ -1,0 +1,33 @@
+{
+    "request_id": "req-xxx",
+    "success": true,
+    "locations": [
+      {
+        "sequence": 1,
+        "area_name": "홍대",
+        "coordinates": {
+          "latitude": 37.5563,
+          "longitude": 126.9220
+        },
+        "reason": "젊은 감성, 트렌디한 분위기, 다양한 맛집과 카페가 많아서 선정"
+      },
+      {
+        "sequence": 2,
+        "area_name": "합정",
+        "coordinates": {
+          "latitude": 37.5495,
+          "longitude": 126.9137
+        },
+        "reason": "홍대와 가까우면서도 한적하고 조용한 분위기, 감성 카페가 많아서 선정"
+      },
+      {
+        "sequence": 3,
+        "area_name": "이태원",
+        "coordinates": {
+          "latitude": 37.5349,
+          "longitude": 126.9946
+        },
+        "reason": "글로벌한 분위기, 다양한 음식점과 이국적인 경험을 할 수 있어서 선정"
+      }
+    ]
+  }
