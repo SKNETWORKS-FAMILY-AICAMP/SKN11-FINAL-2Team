@@ -1,0 +1,33 @@
+{
+    "request_id": "req-xxx",
+    "success": true,
+    "locations": [
+      {
+        "sequence": 1,
+        "area_name": "이촌동",
+        "coordinates": {
+          "latitude": 37.5225,
+          "longitude": 126.9723
+        },
+        "reason": "한강과 가까워 산책하기 좋고, 조용하고 고급스러운 분위기의 음식점이 많아 연인 데이트에 적합해서 선정"
+      },
+      {
+        "sequence": 2,
+        "area_name": "한남동",
+        "coordinates": {
+          "latitude": 37.5357,
+          "longitude": 127.0002
+        },
+        "reason": "감성적인 카페와 트렌디한 공간이 많고, 분위기 있는 저녁 데이트를 즐기기에 좋아서 선정"
+      },
+      {
+        "sequence": 3,
+        "area_name": "후암동",
+        "coordinates": {
+          "latitude": 37.5509,
+          "longitude": 126.9727
+        },
+        "reason": "남산과 가까워 야경과 함께 조용한 술집을 즐길 수 있어, 데이트 마무리에 적합해서 선정"
+      }
+    ]
+  }

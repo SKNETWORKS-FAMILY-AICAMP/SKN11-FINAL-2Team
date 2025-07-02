@@ -1,0 +1,29 @@
+{
+  "profile": {
+    "age": "30",
+    "gender": "남",
+    "mbti": "ISTP",
+    "address": "이동",
+    "relationship_stage": "연인",
+    "atmosphere": "로맨틱",
+    "budget": "10만원 이하",
+    "time_slot": "저녁",
+    "car_owned": false,
+    "description": "조용하고 로맨틱한 술집 좋아합니다",
+    "general_preferences": [
+      "디저",
+      "실내"
+    ],
+    "place_count": 3,
+    "profile_image_url": ""
+  },
+  "location_request": {
+    "proximity_type": "exact",
+    "reference_areas": [
+      "이동"
+    ],
+    "place_count": 3,
+    "proximity_preference": null,
+    "transportation": ""
+  }
+}

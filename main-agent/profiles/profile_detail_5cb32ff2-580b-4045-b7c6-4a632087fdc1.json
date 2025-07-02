@@ -1,0 +1,22 @@
+{
+  "profile": {
+    "age": "30",
+    "gender": "남",
+    "mbti": "ISFP",
+    "address": "이태원, 홍대, 강남",
+    "relationship_stage": "친구",
+    "atmosphere": "조용한 분위기",
+    "budget": "5만원~2만원",
+    "time_slot": "오후"
+  },
+  "location_request": {
+    "proximity_type": "multi",
+    "reference_areas": [
+      "이태원",
+      "홍대",
+      "강남"
+    ],
+    "place_count": 3,
+    "proximity_preference": null
+  }
+}

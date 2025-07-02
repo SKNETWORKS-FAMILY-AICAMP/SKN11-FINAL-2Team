@@ -1,0 +1,29 @@
+{
+  "profile": {
+    "age": "29",
+    "gender": "남",
+    "mbti": "ISTP",
+    "address": "남산",
+    "relationship_stage": "친구",
+    "atmosphere": "조용한",
+    "budget": "10만원 이하",
+    "time_slot": "저녁",
+    "car_owned": false,
+    "description": "강아지를 좋아해",
+    "general_preferences": [
+      "실내",
+      "디저트"
+    ],
+    "place_count": 3,
+    "profile_image_url": ""
+  },
+  "location_request": {
+    "proximity_type": "near",
+    "reference_areas": [
+      "남산"
+    ],
+    "place_count": 3,
+    "proximity_preference": "near",
+    "transportation": "도보"
+  }
+}

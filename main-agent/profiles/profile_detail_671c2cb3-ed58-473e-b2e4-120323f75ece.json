@@ -1,0 +1,21 @@
+{
+  "profile": {
+    "age": "29",
+    "gender": "남",
+    "mbti": "ISTP",
+    "address": "홍대와 합정 사이",
+    "relationship_stage": "썸",
+    "atmosphere": "로맨틱",
+    "budget": "3만원",
+    "time_slot": "저녁"
+  },
+  "location_request": {
+    "proximity_type": "between",
+    "reference_areas": [
+      "홍대",
+      "합정"
+    ],
+    "place_count": 3,
+    "proximity_preference": "middle"
+  }
+}
