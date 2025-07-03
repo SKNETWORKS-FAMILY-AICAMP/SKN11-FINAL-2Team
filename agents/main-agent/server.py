@@ -130,29 +130,18 @@ async def start_recommendation(request: dict):
         
         # 세션에서 저장된 프로필 정보 가져오기
         try:
-            session_memory = agent.get_session_memory(session_id)
-            if session_memory == "세션을 찾을 수 없습니다.":
-                raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다")
-            
-            # 저장된 프로필과 위치 요청 정보 추출
-            # 실제 구현에서는 파일에서 불러오거나 메모리에서 가져와야 함
-            # 여기서는 임시로 기본값 사용
-            profile_dict = {
-                "age": "29",
-                "mbti": "INTP", 
-                "relationship_stage": "연인",
-                "atmosphere": "로맨틱",
-                "budget": "medium",
-                "time_slot": "밤"
-            }
-            
-            location_dict = {
-                "proximity_type": "exact",
-                "reference_areas": ["이촌동"],
-                "place_count": 3,
-                "transportation": "도보"
-            }
-            
+            # 실제 세션에서 프로필/위치 정보 추출
+            from models.request_models import MainAgentRequest
+            chat_request = MainAgentRequest(
+                session_id=session_id,
+                user_message=request.get("user_message", ""),
+                timestamp=request.get("timestamp", "")
+            )
+            profile_response = agent.process_request_with_file_save(chat_request)
+            if not profile_response.success:
+                raise HTTPException(status_code=400, detail="프로필 정보를 가져올 수 없습니다: " + (profile_response.message or ""))
+            profile_dict = profile_response.profile.dict()
+            location_dict = profile_response.location_request.dict()
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"프로필 정보를 가져올 수 없습니다: {str(e)}")
         
