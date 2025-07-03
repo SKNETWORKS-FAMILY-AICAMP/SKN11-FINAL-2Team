@@ -1,0 +1,24 @@
+{
+  "profile": {
+    "age": "",
+    "gender": "",
+    "mbti": "",
+    "address": "",
+    "relationship_stage": "",
+    "atmosphere": "",
+    "budget": "",
+    "time_slot": "",
+    "car_owned": null,
+    "description": null,
+    "general_preferences": null,
+    "place_count": 3,
+    "profile_image_url": null
+  },
+  "location_request": {
+    "proximity_type": "",
+    "reference_areas": [],
+    "place_count": 3,
+    "proximity_preference": null,
+    "transportation": ""
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "description": "A2A 테스트를 위한 예제 요청 데이터",
+  "place_agent_request": {
+    "request_id": "test-a2a-001",
+    "timestamp": "2025-07-03T10:00:00",
+    "request_type": "proximity_based",
+    "location_request": {
+      "proximity_type": "near",
+      "reference_areas": ["홍대"],
+      "place_count": 3,
+      "proximity_preference": "middle",
+      "transportation": "지하철"
+    },
+    "user_context": {
+      "demographics": {
+        "age": 25,
+        "mbti": "ENFP",
+        "relationship_stage": "연인"
+      },
+      "preferences": ["트렌디한", "감성적인"],
+      "requirements": {
+        "budget_level": "medium",
+        "time_preference": "저녁",
+        "transportation": "지하철",
+        "max_travel_time": 30
+      }
+    },
+    "selected_categories": ["카페", "레스토랑"]
+  },
+  "date_course_agent_request": {
+    "search_targets": [
+      {
+        "category": "카페",
+        "location": "홍대",
+        "count": 2
+      },
+      {
+        "category": "레스토랑",
+        "location": "홍대",
+        "count": 1
+      }
+    ],
+    "user_context": {
+      "demographics": {
+        "age": 25,
+        "mbti": "ENFP",
+        "relationship_stage": "연인"
+      },
+      "preferences": ["트렌디한", "감성적인"],
+      "requirements": {
+        "budget_level": "medium",
+        "time_preference": "저녁",
+        "transportation": "지하철",
+        "max_travel_time": 30,
+        "weather_condition": "clear"
+      }
+    },
+    "optimization_options": {
+      "distance_optimization": true,
+      "time_optimization": true,
+      "budget_optimization": true,
+      "sequence_optimization": true
+    }
+  }
+}
