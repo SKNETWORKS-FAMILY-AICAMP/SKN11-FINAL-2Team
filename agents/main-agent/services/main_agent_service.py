@@ -34,7 +34,8 @@ REQUIRED_FIELDS_AND_QUESTIONS = [
 REQUIRED_FIELDS = [f for f, _ in REQUIRED_FIELDS_AND_QUESTIONS]
 
 OPTIONAL_FIELDS = [
-    ("car_owned", "🚗 데이트 이동 시 차량을 직접 운전하실 계획이 있으신가요?\n차량이 있으시면 '예', 없으시면 '아니오'라고 입력해 주세요."),
+    ("car_owned", "🚗 차량을 소유하고 계신가요?\n소유하고 계시면 '예', 그렇지 않으면 '아니오'라고 입력해 주세요."),
+    ("transportation", "🚇 데이트 시 주로 어떤 교통수단을 이용하실 예정인가요?\n예시: 지하철, 버스, 자가용, 택시, 도보 등"),
     ("description", "📝 간단한 자기소개(성격, 취미, 관심사 등)를 자유롭게 입력해 주세요!\n예시: '영화를 좋아하는 20대 직장인입니다.'"),
     ("general_preferences", "✨ 데이트에서 선호하는 요소를 쉼표로 구분해서 입력해 주세요!\n예시: 조용한 곳, 야외, 디저트, 분위기 좋은 카페"),
     ("place_count", "🔢 한 번의 데이트 코스에서 방문하고 싶은 장소의 개수를 숫자로 입력해 주세요!\n예시: 3 (입력하지 않으면 기본값 3으로 설정됩니다.)")
@@ -58,8 +59,13 @@ class MainAgentService:
     def __init__(self, openai_api_key: Optional[str] = None):
         self.openai_api_key = openai_api_key or os.environ.get("OPENAI_API_KEY")
         self.llm = None
+        print(f"[DEBUG] MainAgentService 초기화: API KEY {'설정됨' if self.openai_api_key else '미설정'}")
         if self.openai_api_key:
-            self.llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, openai_api_key=self.openai_api_key)
+            try:
+                self.llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, openai_api_key=self.openai_api_key)
+                print(f"[DEBUG] LLM 초기화 성공")
+            except Exception as e:
+                print(f"[ERROR] LLM 초기화 실패: {str(e)}")
         self.memory_sessions: Dict[str, ConversationBufferMemory] = {}
         self.llm_correction_cache: Dict[str, Dict[str, str]] = {}  # session_id -> {(field, value): corrected}
     
@@ -110,7 +116,17 @@ class MainAgentService:
             return LocationRequest(reference_areas=[address_hint] if address_hint else [])
         
         location_data = extract_location_request_from_llm(self.llm, user_message, address_hint)
-        return LocationRequest(**location_data)
+        return self.safe_create_location_request(location_data, address_hint)
+    
+    def safe_create_location_request(self, location_data: dict, address_hint: Optional[str] = None) -> LocationRequest:
+        """안전한 LocationRequest 객체 생성"""
+        return LocationRequest(
+            proximity_type=location_data.get("proximity_type") or "near",
+            reference_areas=location_data.get("reference_areas") or ([address_hint] if address_hint else []),
+            place_count=location_data.get("place_count") or 3,
+            proximity_preference=location_data.get("proximity_preference"),
+            transportation=location_data.get("transportation") or "지하철"
+        )
     
     def build_agent_requests(self, profile: UserProfile, location_request: LocationRequest, max_travel_time: int = 30) -> tuple:
         """Place Agent와 RAG Agent 요청 JSON 생성"""
@@ -138,6 +154,7 @@ class MainAgentService:
     
     def process_request(self, request: MainAgentRequest) -> MainAgentResponse:
         try:
+            print(f"[DEBUG] MainAgentService.process_request 시작: {request.user_message[:50]}...")
             session_id = request.session_id or str(uuid.uuid4())
             memory = self.get_or_create_memory(session_id)
             memory.save_context(
@@ -156,15 +173,24 @@ class MainAgentService:
 
             # 1. 첫 메시지(세션 시작)에는 LLM으로 전체 필수 정보 추출
             if is_first_message:
+                print(f"[DEBUG] 첫 메시지 처리 시작, LLM 상태: {'설정됨' if self.llm else '미설정'}")
+                if not self.llm:
+                    print(f"[ERROR] LLM이 초기화되지 않음")
+                    raise Exception("OpenAI API 키가 설정되지 않았거나 LLM 초기화에 실패했습니다.")
+                
+                print(f"[DEBUG] extract_profile_from_llm 호출 시작")
                 extracted = extract_profile_from_llm(self.llm, request.user_message)
+                print(f"[DEBUG] extract_profile_from_llm 완료: {extracted}")
                 extracted = rule_based_gender_relationship(request.user_message, extracted)
+                print(f"[DEBUG] rule_based_gender_relationship 완료: {extracted}")
                 for k in REQUIRED_KEYS:
                     if extracted.get(k):
                         setattr(profile, k, extracted[k])
                 # 위치 정보 추출 및 address 보완
-                location_request = extract_location_request_from_llm(self.llm, request.user_message, address_hint=profile.address)
-                if not profile.address and location_request.get("reference_areas"):
-                    profile.address = location_request["reference_areas"][0]
+                location_data = extract_location_request_from_llm(self.llm, request.user_message, address_hint=profile.address)
+                if not profile.address and location_data.get("reference_areas"):
+                    profile.address = location_data["reference_areas"][0]
+                location_request = self.safe_create_location_request(location_data, profile.address)
                 session_info["_is_first_message"] = False
                 SESSION_INFO[session_id] = session_info
             else:
@@ -189,22 +215,23 @@ class MainAgentService:
                             success=True,
                             session_id=session_id,
                             profile=profile,
-                            location_request=LocationRequest(),
+                            location_request=LocationRequest(reference_areas=[]),
                             message=question,
                             needs_recommendation=False,
                             suggestions=missing_fields
                         )
                 # address/location_request 반복 입력
-                location_request = extract_location_request_from_llm(self.llm, request.user_message, address_hint=profile.address)
-                if not profile.address and location_request.get("reference_areas"):
-                    profile.address = location_request["reference_areas"][0]
-                if not profile.address or not location_request.get("reference_areas"):
+                location_data = extract_location_request_from_llm(self.llm, request.user_message, address_hint=profile.address)
+                if not profile.address and location_data.get("reference_areas"):
+                    profile.address = location_data["reference_areas"][0]
+                location_request = self.safe_create_location_request(location_data, profile.address)
+                if not profile.address or not location_data.get("reference_areas"):
                     SESSION_INFO[session_id] = session_info
                     return MainAgentResponse(
                         success=False,
                         session_id=session_id,
                         profile=profile,
-                        location_request=LocationRequest(**location_request),
+                        location_request=location_request,
                         message="장소(지역/동네) 또는 위치 정보를 입력해 주세요.",
                         needs_recommendation=False,
                         suggestions=["address"]
@@ -222,7 +249,7 @@ class MainAgentService:
                     success=True,
                     session_id=session_id,
                     profile=profile,
-                    location_request=LocationRequest(),
+                    location_request=LocationRequest(reference_areas=[]),
                     message=question,
                     needs_recommendation=False,
                     suggestions=missing_fields
@@ -236,8 +263,8 @@ class MainAgentService:
                     success=True,
                     session_id=session_id,
                     profile=profile,
-                    location_request=LocationRequest(**location_request),
-                    message="추가 정보(차량, 자기소개, 선호 등)를 입력하시겠습니까? (예/아니오)",
+                    location_request=location_request,
+                    message="추가 정보(차량 보유, 교통수단, 개인 취향 등)를 입력하시겠습니까? (예/아니오)",
                     needs_recommendation=False,
                     suggestions=[]
                 )
@@ -254,7 +281,7 @@ class MainAgentService:
                         success=True,
                         session_id=session_id,
                         profile=profile,
-                        location_request=LocationRequest(**location_request),
+                        location_request=location_request,
                         message=question,
                         needs_recommendation=False,
                         suggestions=[]
@@ -269,8 +296,8 @@ class MainAgentService:
                         success=True,
                         session_id=session_id,
                         profile=profile,
-                        location_request=LocationRequest(**location_request),
-                        message="'예' 또는 '아니오'로 답변해 주세요. 추가 정보(차량, 자기소개, 선호 등)를 입력하시겠습니까? (예/아니오)",
+                        location_request=location_request,
+                        message="'예' 또는 '아니오'로 답변해 주세요. 추가 정보(차량 보유, 교통수단, 개인 취향 등)를 입력하시겠습니까? (예/아니오)",
                         needs_recommendation=False,
                         suggestions=[]
                     )
@@ -289,7 +316,7 @@ class MainAgentService:
                                 success=True,
                                 session_id=session_id,
                                 profile=profile,
-                                location_request=LocationRequest(**location_request),
+                                location_request=location_request,
                                 message=next_question,
                                 needs_recommendation=False,
                                 suggestions=[]
@@ -305,6 +332,8 @@ class MainAgentService:
                             setattr(profile, key, answer in ["예", "yes", "Yes", "Y", "y", "true", "True"])
                         elif key == "place_count":
                             setattr(profile, key, int(answer) if answer.isdigit() else 3)
+                        elif key == "transportation":
+                            setattr(profile, key, answer.strip())
                         else:
                             setattr(profile, key, answer)
                         session_info["_optional_idx"] = idx + 1
@@ -315,7 +344,7 @@ class MainAgentService:
                                 success=True,
                                 session_id=session_id,
                                 profile=profile,
-                                location_request=LocationRequest(**location_request),
+                                location_request=location_request,
                                 message=next_question,
                                 needs_recommendation=False,
                                 suggestions=[]
@@ -331,13 +360,13 @@ class MainAgentService:
 
             # 6. 추천 바로 실행
             place_agent_request, rag_agent_request = self.build_agent_requests(
-                profile, LocationRequest(**location_request), request.max_travel_time
+                profile, location_request, request.max_travel_time
             )
             return MainAgentResponse(
                 success=True,
                 session_id=session_id,
                 profile=profile,
-                location_request=LocationRequest(**location_request),
+                location_request=location_request,
                 place_agent_request=place_agent_request,
                 rag_agent_request=rag_agent_request,
                 message="추천이 완료되었습니다!",
@@ -349,7 +378,7 @@ class MainAgentService:
                 success=False,
                 session_id=request.session_id or str(uuid.uuid4()),
                 profile=UserProfile(),
-                location_request=LocationRequest(),
+                location_request=LocationRequest(reference_areas=[]),
                 error=str(e),
                 needs_recommendation=False,
                 suggestions=REQUIRED_KEYS

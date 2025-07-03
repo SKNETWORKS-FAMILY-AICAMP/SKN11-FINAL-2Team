@@ -265,8 +265,8 @@ if __name__ == "__main__":
         """헬스 체크 API"""
         return await agent.health_check()
     
-    # 서버 실행
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # 서버 실행 (포트는 start_server.py에서 관리)
+    # uvicorn.run(app, host="0.0.0.0", port=8000)  # 주석 처리: start_server.py에서 실행
 
 # 직접 함수 호출로 사용할 경우
 async def main():

@@ -24,7 +24,7 @@ def main():
         print("   예: echo 'OPENAI_API_KEY=your_key_here' > .env")
     
     # 포트 설정
-    port = os.getenv("MAIN_AGENT_PORT", "8000")
+    port = os.getenv("MAIN_AGENT_PORT", "8001")
     
     # 서버 실행
     print("🚀 Main Agent 서버를 시작합니다...")

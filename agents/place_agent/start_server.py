@@ -119,7 +119,7 @@ if __name__ == "__main__":
     uvicorn.run(
         "start_server:app",
         host="0.0.0.0",
-        port=8001,
+        port=settings.SERVER_PORT,
         reload=True,
         log_level="info"
     )

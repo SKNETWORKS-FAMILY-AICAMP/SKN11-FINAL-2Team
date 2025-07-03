@@ -97,6 +97,48 @@
         ],
         "total_distance_meters": 200,
         "recommendation_reason": "공원 산책 후 핫플레이스 카페 방문 코스"
+      },
+      {
+        "course_id": "sunny_course_3",
+        "places": [
+          {
+            "sequence": 1,
+            "place_info": {
+              "place_id": "place_009",
+              "name": "남산타워",
+              "category": "관광지",
+              "coordinates": {
+                "latitude": 37.5512,
+                "longitude": 126.9882
+              },
+              "similarity_score": 0.89
+            },
+            "description": "서울의 랜드마크에서 로맨틱한 전망 감상"
+          },
+          {
+            "sequence": 2,
+            "place_info": {
+              "place_id": "place_010",
+              "name": "명동 카페거리",
+              "category": "카페",
+              "coordinates": {
+                "latitude": 37.5636,
+                "longitude": 126.9834
+              },
+              "similarity_score": 0.73
+            },
+            "description": "남산 하산 후 명동에서 달콤한 디저트 타임"
+          }
+        ],
+        "travel_info": [
+          {
+            "from": "남산타워",
+            "to": "명동 카페거리",
+            "distance_meters": 1200
+          }
+        ],
+        "total_distance_meters": 1200,
+        "recommendation_reason": "서울 대표 관광지와 번화가를 연결한 클래식 데이트 코스"
       }
     ],
     "rainy_weather": [
@@ -183,6 +225,48 @@
         ],
         "total_distance_meters": 80,
         "recommendation_reason": "실내 관광지와 식사를 함께 즐기는 비 오는 날 코스"
+      },
+      {
+        "course_id": "rainy_course_3",
+        "places": [
+          {
+            "sequence": 1,
+            "place_info": {
+              "place_id": "place_011",
+              "name": "국립중앙박물관",
+              "category": "문화시설",
+              "coordinates": {
+                "latitude": 37.5240,
+                "longitude": 126.9803
+              },
+              "similarity_score": 0.84
+            },
+            "description": "비 오는 날 실내에서 문화와 역사를 체험해보세요"
+          },
+          {
+            "sequence": 2,
+            "place_info": {
+              "place_id": "place_012",
+              "name": "용산 아이파크몰",
+              "category": "쇼핑몰",
+              "coordinates": {
+                "latitude": 37.5262,
+                "longitude": 126.9653
+              },
+              "similarity_score": 0.79
+            },
+            "description": "박물관 관람 후 쇼핑몰에서 쇼핑과 식사"
+          }
+        ],
+        "travel_info": [
+          {
+            "from": "국립중앙박물관",
+            "to": "용산 아이파크몰",
+            "distance_meters": 1100
+          }
+        ],
+        "total_distance_meters": 1100,
+        "recommendation_reason": "문화 체험과 쇼핑을 함께 즐기는 교양 있는 실내 데이트 코스"
       }
     ]
   },

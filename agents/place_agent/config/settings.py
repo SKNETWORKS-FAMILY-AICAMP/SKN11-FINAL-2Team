@@ -17,7 +17,7 @@ class Settings:
     
     # 서버 설정
     SERVER_HOST: str = os.getenv("SERVER_HOST", "0.0.0.0")
-    SERVER_PORT: int = int(os.getenv("SERVER_PORT", "8001"))
+    SERVER_PORT: int = int(os.getenv("SERVER_PORT", "8002"))
     
     # Place Agent 설정
     DEFAULT_PLACE_COUNT: int = 3

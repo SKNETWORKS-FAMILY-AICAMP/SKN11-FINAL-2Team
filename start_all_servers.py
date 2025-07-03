@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
 모든 에이전트 서버를 한 번에 실행하는 스크립트
-- Main Agent (포트 8000)
-- Place Agent (포트 8001)  
-- Date-Course Agent (포트 8002)
+- Main Agent (포트 3001)
+- Place Agent (포트 3002)  
+- Date-Course Agent (포트 3003)
 """
 
 import os
@@ -22,19 +22,19 @@ AGENTS = {
     "main-agent": {
         "path": SCRIPT_DIR / "agents" / "main-agent",
         "script": "run_server.py",
-        "port": 8000,
+        "port": 8001,
         "name": "Main Agent"
     },
     "place-agent": {
         "path": SCRIPT_DIR / "agents" / "place_agent", 
         "script": "start_server.py",
-        "port": 8001,
+        "port": 8002,
         "name": "Place Agent"
     },
     "date-course-agent": {
         "path": SCRIPT_DIR / "agents" / "date-course-agent",
         "script": "start_server.py", 
-        "port": 8002,
+        "port": 8003,
         "name": "Date-Course Agent"
     }
 }
@@ -86,11 +86,21 @@ def start_agent(agent_key, agent_config):
     print(f"   - 경로: {agent_config['path']}")
     print(f"   - 포트: {agent_config['port']}")
     
+    # 각 에이전트별 포트 환경변수 설정
+    env = os.environ.copy()
+    if agent_key == "main-agent":
+        env["MAIN_AGENT_PORT"] = str(agent_config['port'])
+    elif agent_key == "place-agent":
+        env["SERVER_PORT"] = str(agent_config['port'])
+    elif agent_key == "date-course-agent":
+        env["DATE_COURSE_AGENT_PORT"] = str(agent_config['port'])
+    
     # 해당 디렉토리로 이동하여 서버 실행
     try:
         process = subprocess.Popen(
             [sys.executable, agent_config['script']],
             cwd=agent_config['path'],
+            env=env,  # 환경변수 전달
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             universal_newlines=True,
@@ -125,9 +135,9 @@ def check_servers_health():
     import requests
     
     health_endpoints = {
-        "Main Agent": "http://localhost:8000/api/health",
-        "Place Agent": "http://localhost:8001/health", 
-        "Date-Course Agent": "http://localhost:8002/health"
+        "Main Agent": "http://localhost:8001/api/health",
+        "Place Agent": "http://localhost:8002/health", 
+        "Date-Course Agent": "http://localhost:8003/health"
     }
     
     print("\n🔍 서버 헬스 체크...")
@@ -170,9 +180,9 @@ def main():
     print("🎯 다중 에이전트 서버 시작")
     print("=" * 60)
     print("새로운 포트 구성:")
-    print("  - Main Agent: 포트 8000")
-    print("  - Place Agent: 포트 8001") 
-    print("  - Date-Course Agent: 포트 8002")
+    print("  - Main Agent: 포트 8001")
+    print("  - Place Agent: 포트 8002") 
+    print("  - Date-Course Agent: 포트 8003")
     print("=" * 60)
     
     # 시그널 핸들러 등록 (Ctrl+C 처리)
@@ -242,13 +252,13 @@ def main():
     print("\n📊 서버 정보")
     print("=" * 60)
     print("🌐 API 엔드포인트:")
-    print("  - Main Agent: http://localhost:8000/docs")
-    print("  - Place Agent: http://localhost:8001/docs") 
-    print("  - Date-Course Agent: http://localhost:8002/docs")
+    print("  - Main Agent: http://localhost:8001/docs")
+    print("  - Place Agent: http://localhost:8002/docs") 
+    print("  - Date-Course Agent: http://localhost:8003/docs")
     print("\n💡 헬스 체크:")
-    print("  - Main Agent: http://localhost:8000/api/health")
-    print("  - Place Agent: http://localhost:8001/health")
-    print("  - Date-Course Agent: http://localhost:8002/health")
+    print("  - Main Agent: http://localhost:8001/api/health")
+    print("  - Place Agent: http://localhost:8002/health")
+    print("  - Date-Course Agent: http://localhost:8003/health")
     print("\n🧪 A2A 테스트 실행:")
     print("  cd agents/main-agent && python test_a2a.py")
     print("\n⏹️ 종료: Ctrl+C")

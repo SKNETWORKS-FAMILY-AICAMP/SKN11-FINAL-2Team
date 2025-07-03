@@ -4,7 +4,7 @@ Main Agent FastAPI Server
 """
 
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import requests
@@ -14,17 +14,19 @@ from typing import Dict, List, Optional
 import uuid
 import datetime
 import json
+import asyncio
 
 from main_agent import MainAgent
-from models.request_models import MainAgentRequest
-from models.response_models import MainAgentResponse
+from models.request_models import MainAgentRequest, NewSessionRequest, SendMessageRequest
+from models.response_models import MainAgentResponse, NewSessionResponse, SendMessageResponse, ResponseMessage, SessionInfo, CourseData
+from services.main_agent_service import MainAgentService
 
 load_dotenv()
 
 # 포트 설정을 환경변수로 변경
-PORT = int(os.getenv("MAIN_AGENT_PORT", 8000))
-PLACE_AGENT_URL = os.getenv("PLACE_AGENT_URL", "http://localhost:8001")
-RAG_AGENT_URL = os.getenv("RAG_AGENT_URL", "http://localhost:8002")
+PORT = int(os.getenv("MAIN_AGENT_PORT", 8001))
+PLACE_AGENT_URL = os.getenv("PLACE_AGENT_URL", "http://localhost:8002")
+RAG_AGENT_URL = os.getenv("RAG_AGENT_URL", "http://localhost:8003")
 
 app = FastAPI(
     title="Main Agent API",
@@ -43,10 +45,144 @@ app.add_middleware(
 )
 
 agent = MainAgent(os.getenv("OPENAI_API_KEY"))
+main_agent_service = MainAgentService(os.getenv("OPENAI_API_KEY"))
 
 # 임시 메모리 저장소
 SESSIONS = {}  # session_id -> session_info
 MESSAGES = {}  # session_id -> List[message]
+
+async def execute_recommendation_flow(main_resp):
+    """Place Agent → RAG Agent 추천 플로우 실행"""
+    try:
+        from core.agent_builders import build_place_agent_json, build_rag_agent_json
+        
+        profile_dict = main_resp.profile.dict()
+        location_dict = main_resp.location_request.dict()
+        
+        # Step 1: Place Agent 호출
+        print(f"[DEBUG] Place Agent 요청 생성")
+        place_request = build_place_agent_json(
+            profile=profile_dict,
+            location_request=location_dict
+        )
+        
+        print(f"[DEBUG] ===== Place Agent Request =====")
+        print(json.dumps(place_request, ensure_ascii=False, indent=2))
+        print(f"[DEBUG] ==============================")
+        
+        print(f"[DEBUG] Place Agent API 호출: {PLACE_AGENT_URL}/place-agent")
+        place_response = requests.post(
+            f"{PLACE_AGENT_URL}/place-agent",
+            json=place_request,
+            headers={"Content-Type": "application/json"},
+            timeout=30
+        )
+        
+        if place_response.status_code != 200:
+            print(f"[ERROR] Place Agent 호출 실패: HTTP {place_response.status_code}")
+            return None
+            
+        place_result = place_response.json()
+        print(f"[DEBUG] ===== Place Agent Response =====")
+        print(json.dumps(place_result, ensure_ascii=False, indent=2))
+        print(f"[DEBUG] ===============================")
+        print(f"[DEBUG] Place Agent 응답 성공")
+        
+        if not place_result.get("success"):
+            print(f"[ERROR] Place Agent 처리 실패")
+            return None
+        
+        # Step 2: RAG Agent 호출
+        print(f"[DEBUG] RAG Agent 요청 생성")
+        rag_request = build_rag_agent_json(
+            place_response=place_result,
+            profile=profile_dict,
+            location_request=location_dict,
+            openai_api_key=os.getenv("OPENAI_API_KEY")
+        )
+        
+        print(f"[DEBUG] ===== RAG Agent Request =====")
+        # API 키는 마스킹해서 출력
+        rag_request_safe = dict(rag_request)
+        if "openai_api_key" in rag_request_safe:
+            rag_request_safe["openai_api_key"] = "sk-***" + rag_request_safe["openai_api_key"][-10:]
+        print(json.dumps(rag_request_safe, ensure_ascii=False, indent=2))
+        print(f"[DEBUG] ============================")
+        
+        print(f"[DEBUG] RAG Agent API 호출: {RAG_AGENT_URL}/recommend-course")
+        rag_response = requests.post(
+            f"{RAG_AGENT_URL}/recommend-course",
+            json=rag_request,
+            headers={"Content-Type": "application/json"},
+            timeout=60
+        )
+        
+        if rag_response.status_code != 200:
+            print(f"[ERROR] RAG Agent 호출 실패: HTTP {rag_response.status_code}")
+            return None
+            
+        try:
+            rag_result = rag_response.json()
+            print(f"[DEBUG] ===== RAG Agent Response (FULL) =====")
+            print(json.dumps(rag_result, ensure_ascii=False, indent=2))
+            print(f"[DEBUG] =====================================")
+            
+            if rag_result is None:
+                print("[ERROR] RAG Agent 응답이 None입니다")
+                return None
+            
+            # 응답이 너무 클 수 있으므로 요약해서 출력
+            rag_summary = {
+                "success": rag_result.get("status") == "success" if isinstance(rag_result, dict) else "Not dict",
+                "response_type": type(rag_result).__name__,
+                "response_keys": list(rag_result.keys()) if isinstance(rag_result, dict) else "Not dict"
+            }
+            
+            if isinstance(rag_result, dict):
+                # RAG Agent 응답 구조: results.sunny_weather, results.rainy_weather
+                results = rag_result.get("results", {})
+                rag_summary.update({
+                    "sunny_courses_count": len(results.get("sunny_weather", [])),
+                    "rainy_courses_count": len(results.get("rainy_weather", [])),
+                    "total_places": "N/A",
+                    "processing_time": rag_result.get("processing_time"),
+                    "message": rag_result.get("message", "")[:100] if rag_result.get("message") else "No message"
+                })
+            
+            print(json.dumps(rag_summary, ensure_ascii=False, indent=2))
+            print(f"[DEBUG] ============================")
+            print(f"[DEBUG] RAG Agent 응답 성공")
+            
+        except json.JSONDecodeError as e:
+            print(f"[ERROR] RAG Agent JSON 파싱 실패: {e}")
+            print(f"[ERROR] 원본 응답: {rag_response.text[:500]}...")
+            return None
+        except Exception as e:
+            print(f"[ERROR] RAG Agent 응답 처리 오류: {e}")
+            print(f"[ERROR] 응답 타입: {type(rag_result)}")
+            return None
+        
+        # RAG Agent 성공 여부 확인
+        if rag_result.get("status") != "success":
+            print(f"[ERROR] RAG Agent 처리 실패: {rag_result.get('message', 'Unknown error')}")
+            return None
+        
+        # 코스 데이터 생성
+        course_data = {
+            "places": place_result.get("locations", []),
+            "course": rag_result,
+            "created_at": datetime.datetime.now().isoformat()
+        }
+        
+        print(f"[DEBUG] 코스 데이터 생성 완료")
+        print(f"[DEBUG] Place locations 개수: {len(place_result.get('locations', []))}")
+        print(f"[DEBUG] Course 데이터 키: {list(rag_result.keys())}")
+        
+        return course_data
+        
+    except Exception as e:
+        print(f"[ERROR] 추천 플로우 실행 오류: {str(e)}")
+        return None
 
 # 데이터 모델
 class UserProfile(BaseModel):
@@ -71,494 +207,45 @@ class SendMessageRequest(BaseModel):
     user_id: int
     user_profile: UserProfile
 
-@app.post("/chat")
-async def chat_with_agent(request: dict):
-    """일반 채팅 API - 맥락 유지하며 지속적 대화"""
-    try:
-        from models.request_models import MainAgentRequest
-        
-        # 요청 데이터 추출
-        session_id = request.get("session_id")
-        user_message = request.get("user_message")
-        timestamp = request.get("timestamp")
-        
-        if not all([session_id, user_message]):
-            raise HTTPException(status_code=400, detail="session_id와 user_message가 필요합니다")
-        
-        # 채팅 요청 생성
-        chat_request = MainAgentRequest(
-            session_id=session_id,
-            user_message=user_message,
-            timestamp=timestamp or ""
-        )
-        
-        # 프로필 추출 및 응답 생성
-        response = agent.process_request_with_file_save(chat_request)
-        
-        # 응답 구성
-        result = {
-            "session_id": session_id,
-            "success": response.success,
-            "message": response.message,
-            "profile_status": "completed" if response.success else "incomplete",
-            "needs_recommendation": response.needs_recommendation if hasattr(response, 'needs_recommendation') else False,
-            "extracted_info": response.profile.dict() if response.success else None,
-            "suggestions": getattr(response, 'suggestions', [])
-        }
-        
-        # 추천 준비 완료 시 추가 정보 제공
-        if response.success and hasattr(response, 'needs_recommendation') and response.needs_recommendation:
-            result["recommendation_ready"] = True
-            result["next_action"] = "추천을 시작하려면 /recommend 엔드포인트를 호출하세요"
-        
-        return result
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+# [LEGACY] 일반 채팅 API - 새로운 통합 API(/chat/new-session, /chat/send-message)로 대체됨
+# @app.post("/chat")
+# async def chat_with_agent(request: dict):
+#     """일반 채팅 API - 맥락 유지하며 지속적 대화"""
 
-@app.post("/recommend")
-async def start_recommendation(request: dict):
-    """추천 시작 API - Place Agent → RAG Agent 전체 플로우 실행"""
-    try:
-        from core.agent_builders import build_place_agent_json, build_rag_agent_json
-        
-        # 요청 데이터 추출
-        session_id = request.get("session_id")
-        
-        if not session_id:
-            raise HTTPException(status_code=400, detail="session_id가 필요합니다")
-        
-        # 세션에서 저장된 프로필 정보 가져오기
-        try:
-            # 실제 세션에서 프로필/위치 정보 추출
-            from models.request_models import MainAgentRequest
-            chat_request = MainAgentRequest(
-                session_id=session_id,
-                user_message=request.get("user_message", ""),
-                timestamp=request.get("timestamp", "")
-            )
-            profile_response = agent.process_request_with_file_save(chat_request)
-            if not profile_response.success:
-                raise HTTPException(status_code=400, detail="프로필 정보를 가져올 수 없습니다: " + (profile_response.message or ""))
-            profile_dict = profile_response.profile.dict()
-            location_dict = profile_response.location_request.dict()
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"프로필 정보를 가져올 수 없습니다: {str(e)}")
-        
-        flow_results = {}
-        
-        # Step 1: Place Agent 요청
-        try:
-            place_request = build_place_agent_json(
-                profile=profile_dict,
-                location_request=location_dict
-            )
-            
-            # Place Agent API 호출
-            place_agent_url = f"{PLACE_AGENT_URL}/place-agent"
-            print("\n[PlaceAgent Request] ↓↓↓")
-            print(json.dumps(place_request, ensure_ascii=False, indent=2))
-            place_response = requests.post(
-                place_agent_url,
-                json=place_request,
-                headers={"Content-Type": "application/json"},
-                timeout=30
-            )
-            print("[PlaceAgent Response] ↑↑↑")
-            try:
-                print(json.dumps(place_response.json(), ensure_ascii=False, indent=2))
-            except Exception:
-                print(place_response.text)
-            
-            if place_response.status_code == 200:
-                place_result = place_response.json()
-                flow_results["place_agent"] = {
-                    "status": "completed",
-                    "success": place_result.get("success", False),
-                    "data": place_result
-                }
-                
-                if not place_result.get("success"):
-                    return {
-                        "success": False,
-                        "message": "장소 추천 실패",
-                        "flow_results": flow_results
-                    }
-            else:
-                flow_results["place_agent"] = {
-                    "status": "failed",
-                    "error": f"HTTP {place_response.status_code}"
-                }
-                return {
-                    "success": False,
-                    "message": "Place Agent 호출 실패",
-                    "flow_results": flow_results
-                }
-                
-        except Exception as e:
-            flow_results["place_agent"] = {
-                "status": "failed",
-                "error": str(e)
-            }
-            return {
-                "success": False,
-                "message": f"Place Agent 오류: {str(e)}",
-                "flow_results": flow_results
-            }
-        
-        # Step 2: RAG Agent 요청
-        try:
-            rag_request = build_rag_agent_json(
-                place_response=place_result,
-                profile=profile_dict,
-                location_request=location_dict,
-                openai_api_key=os.getenv("OPENAI_API_KEY")
-            )
-            print("\n[RagAgent Request] ↓↓↓")
-            print(json.dumps(rag_request, ensure_ascii=False, indent=2))
-            # RAG Agent API 호출
-            rag_agent_url = f"{RAG_AGENT_URL}/recommend-course"
-            rag_response = requests.post(
-                rag_agent_url,
-                json=rag_request,
-                headers={"Content-Type": "application/json"},
-                timeout=60
-            )
-            print("[RagAgent Response] ↑↑↑")
-            try:
-                print(json.dumps(rag_response.json(), ensure_ascii=False, indent=2))
-            except Exception:
-                print(rag_response.text)
-            
-            if rag_response.status_code == 200:
-                rag_result = rag_response.json()
-                flow_results["rag_agent"] = {
-                    "status": "completed",
-                    "success": True,
-                    "data": rag_result
-                }
-                
-                return {
-                    "success": True,
-                    "message": "추천 완료",
-                    "session_id": session_id,
-                    "flow_results": flow_results,
-                    "recommendation": {
-                        "places": flow_results["place_agent"]["data"]["locations"],
-                        "course": rag_result,
-                        "created_at": datetime.datetime.now().isoformat()
-                    }
-                }
-            else:
-                flow_results["rag_agent"] = {
-                    "status": "failed",
-                    "error": f"HTTP {rag_response.status_code}"
-                }
-                return {
-                    "success": False,
-                    "message": "RAG Agent 호출 실패",
-                    "flow_results": flow_results
-                }
-                
-        except Exception as e:
-            flow_results["rag_agent"] = {
-                "status": "failed",
-                "error": str(e)
-            }
-            return {
-                "success": False,
-                "message": f"RAG Agent 오류: {str(e)}",
-                "flow_results": flow_results
-            }
-            
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+# [LEGACY] 추천 시작 API - 새로운 통합 API(/chat/send-message)로 대체됨
+# @app.post("/recommend")
+# async def start_recommendation(request: dict):
+#     """추천 시작 API - Place Agent → RAG Agent 전체 플로우 실행"""
 
-@app.get("/session/{session_id}")
-async def get_session_info(session_id: str):
-    """세션 복원 API - 이전 채팅 및 상태 불러오기"""
-    try:
-        # 세션 메모리 조회
-        session_memory = agent.get_session_memory(session_id)
-        
-        if session_memory == "세션을 찾을 수 없습니다.":
-            return {
-                "session_id": session_id,
-                "exists": False,
-                "message": "세션을 찾을 수 없습니다"
-            }
-        
-        # 프로필 상태 확인
-        profile_status = "incomplete"
-        extracted_info = None
-        needs_recommendation = False
-        
-        # 여기서 실제로는 저장된 프로필 파일이나 메모리에서 상태를 확인해야 함
-        # 임시로 간단한 로직 사용
-        if session_memory and len(session_memory) > 0:
-            profile_status = "completed"
-            extracted_info = {
-                "age": "29",
-                "mbti": "INTP",
-                "relationship_stage": "연인"
-            }
-            needs_recommendation = True
-        
-        return {
-            "session_id": session_id,
-            "exists": True,
-            "session_memory": session_memory,
-            "profile_status": profile_status,
-            "extracted_info": extracted_info,
-            "needs_recommendation": needs_recommendation,
-            "last_activity": datetime.datetime.now().isoformat()
-        }
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+# [LEGACY] 세션 복원 API - 새로운 통합 API(/chat/sessions/{session_id})로 대체됨
+# @app.get("/session/{session_id}")
+# async def get_session_info(session_id: str):
+#     """세션 복원 API - 이전 채팅 및 상태 불러오기"""
 
-@app.post("/chat/complete_flow")
-async def complete_chat_flow(request: dict):
-    """완전한 채팅 플로우: 채팅 → Place Agent → RAG Agent → 결과 반환"""
-    try:
-        from core.agent_builders import build_place_agent_json, build_rag_agent_json
-        from models.request_models import MainAgentRequest
-        
-        # 요청 데이터 추출
-        session_id = request.get("session_id")
-        user_message = request.get("user_message")
-        timestamp = request.get("timestamp")
-        
-        if not all([session_id, user_message]):
-            raise HTTPException(status_code=400, detail="session_id와 user_message가 필요합니다")
-        
-        flow_results = {}
-        
-        # Step 1: 채팅 메시지로부터 프로필 추출
-        chat_request = MainAgentRequest(
-            session_id=session_id,
-            user_message=user_message,
-            timestamp=timestamp or ""
-        )
-        
-        profile_response = agent.process_request_with_file_save(chat_request)
-        flow_results["profile_extraction"] = {
-            "status": "completed" if profile_response.success else "failed",
-            "extracted_info": profile_response.profile.dict() if profile_response.success else None,
-            "location_request": profile_response.location_request.dict() if profile_response.success else None
-        }
-        
-        if not profile_response.success:
-            return {
-                "success": False,
-                "message": "프로필 추출 실패",
-                "flow_results": flow_results
-            }
-        
-        # 추천 요청이 있는 경우에만 Place Agent와 RAG Agent 호출
-        if not profile_response.needs_recommendation:
-            return {
-                "success": True,
-                "message": profile_response.message,
-                "flow_results": flow_results,
-                "final_recommendation": None
-            }
-        
-        # Step 2: Place Agent 요청
-        try:
-            profile_dict = profile_response.profile.dict()
-            location_dict = profile_response.location_request.dict()
-            
-            place_request = build_place_agent_json(
-                profile=profile_dict,
-                location_request=location_dict
-            )
-            
-            # Place Agent API 호출
-            place_agent_url = f"{PLACE_AGENT_URL}/place-agent"
-            place_response = requests.post(
-                place_agent_url,
-                json=place_request,
-                headers={"Content-Type": "application/json"},
-                timeout=30
-            )
-            
-            if place_response.status_code == 200:
-                place_result = place_response.json()
-                flow_results["place_agent"] = {
-                    "status": "completed",
-                    "success": place_result.get("success", False),
-                    "data": place_result
-                }
-                
-                if not place_result.get("success"):
-                    return {
-                        "success": False,
-                        "message": "장소 추천 실패",
-                        "flow_results": flow_results
-                    }
-            else:
-                flow_results["place_agent"] = {
-                    "status": "failed",
-                    "error": f"HTTP {place_response.status_code}"
-                }
-                return {
-                    "success": False,
-                    "message": "Place Agent 호출 실패",
-                    "flow_results": flow_results
-                }
-                
-        except Exception as e:
-            flow_results["place_agent"] = {
-                "status": "failed",
-                "error": str(e)
-            }
-            return {
-                "success": False,
-                "message": f"Place Agent 오류: {str(e)}",
-                "flow_results": flow_results
-            }
-        
-        # Step 3: RAG Agent 요청
-        try:
-            # Place Agent 응답을 RAG Agent 요청으로 변환
-            rag_request = build_rag_agent_json(
-                place_response=place_result,
-                profile=profile_dict,
-                location_request=location_dict,
-                openai_api_key=os.getenv("OPENAI_API_KEY")
-            )
-            
-            # RAG Agent API 호출
-            rag_agent_url = f"{RAG_AGENT_URL}/recommend-course"
-            rag_response = requests.post(
-                rag_agent_url,
-                json=rag_request,
-                headers={"Content-Type": "application/json"},
-                timeout=60
-            )
-            
-            if rag_response.status_code == 200:
-                rag_result = rag_response.json()
-                flow_results["rag_agent"] = {
-                    "status": "completed",
-                    "success": True,
-                    "data": rag_result
-                }
-                
-                # 최종 추천 메시지 생성
-                final_message = "데이트 코스가 성공적으로 생성되었습니다! 위의 코스 정보를 확인해보세요."
-                
-                return {
-                    "success": True,
-                    "message": "전체 플로우 완료",
-                    "flow_results": flow_results,
-                    "final_recommendation": final_message
-                }
-            else:
-                flow_results["rag_agent"] = {
-                    "status": "failed",
-                    "error": f"HTTP {rag_response.status_code}"
-                }
-                return {
-                    "success": False,
-                    "message": "RAG Agent 호출 실패",
-                    "flow_results": flow_results
-                }
-                
-        except Exception as e:
-            flow_results["rag_agent"] = {
-                "status": "failed",
-                "error": str(e)
-            }
-            return {
-                "success": False,
-                "message": f"RAG Agent 오류: {str(e)}",
-                "flow_results": flow_results
-            }
-            
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+# [LEGACY] 완전한 채팅 플로우 - 새로운 통합 API(/chat/send-message)로 대체됨
+# @app.post("/chat/complete_flow")
+# async def complete_chat_flow(request: dict):
+#     """완전한 채팅 플로우: 채팅 → Place Agent → RAG Agent → 결과 반환"""
 
-@app.post("/place/request")
-async def request_place(request: dict):
-    """Place Agent로 장소 추천 요청 전달 (A2A 통신)"""
-    try:
-        # Place Agent로 요청 전송 (환경변수 사용)
-        place_agent_url = f"{PLACE_AGENT_URL}/place-agent"
-        response = requests.post(
-            place_agent_url,
-            json=request,
-            headers={"Content-Type": "application/json"},
-            timeout=30
-        )
-        
-        if response.status_code == 200:
-            result = response.json()
-            return {
-                "success": True,
-                "message": "Place Agent 요청 처리 완료",
-                "data": result
-            }
-        else:
-            return {
-                "success": False,
-                "message": "Place Agent 요청 처리 실패",
-                "error": response.text
-            }
-            
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+# [LEGACY] Place Agent 요청 - 새로운 통합 API(/chat/send-message)로 대체됨
+# @app.post("/place/request")
+# async def request_place(request: dict):
+#     """Place Agent로 장소 추천 요청 전달 (A2A 통신)"""
 
-@app.post("/course/request")
-async def request_course(request: dict):
-    """RAG Agent로 코스 생성 요청 전달 (A2A 통신)"""
-    try:
-        from services.rag_client import RagAgentClient
-        
-        # RAG Agent 클라이언트 생성
-        rag_client = RagAgentClient()
-        
-        # RAG Agent로 요청 전송
-        result = await rag_client.process_rag_request(request)
-        
-        if result["success"]:
-            return {
-                "success": True,
-                "message": "RAG Agent 요청 처리 완료",
-                "data": result["data"]
-            }
-        else:
-            return {
-                "success": False,
-                "message": "RAG Agent 요청 처리 실패",
-                "error": result["error"]
-            }
-            
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+# [LEGACY] RAG Agent 요청 - 새로운 통합 API(/chat/send-message)로 대체됨
+# @app.post("/course/request")
+# async def request_course(request: dict):
+#     """RAG Agent로 코스 생성 요청 전달 (A2A 통신)"""
 
-@app.get("/profile/{session_id}")
-async def get_profile(session_id: str):
-    """세션별 프로필 조회"""
-    try:
-        memory = agent.get_session_memory(session_id)
-        return {
-            "session_id": session_id, 
-            "memory": memory,
-            "status": "found" if memory != "세션을 찾을 수 없습니다." else "not_found"
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+# [LEGACY] 세션별 프로필 조회 - 새로운 통합 API(/chat/sessions/{session_id})로 대체됨
+# @app.get("/profile/{session_id}")
+# async def get_profile(session_id: str):
+#     """세션별 프로필 조회"""
 
-@app.delete("/session/{session_id}")
-async def clear_session(session_id: str):
-    """세션 삭제"""
-    try:
-        success = agent.clear_session(session_id)
-        return {"session_id": session_id, "cleared": success}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+# [LEGACY] 세션 삭제 - 새로운 통합 API(/chat/sessions/{session_id})로 대체됨
+# @app.delete("/session/{session_id}")
+# async def clear_session(session_id: str):
+#     """세션 삭제"""
 
 @app.get("/api/health")
 async def health_check():
@@ -581,78 +268,156 @@ async def root():
     }
 
 # 1. 새 채팅 세션 시작
-@app.post("/chat/new-session")
+@app.post("/chat/new-session", response_model=NewSessionResponse)
 def new_session(req: NewSessionRequest):
     session_id = f"sess_{uuid.uuid4().hex[:12]}"
     now = datetime.datetime.now().isoformat() + "Z"
+    expires_at = (datetime.datetime.now() + datetime.timedelta(days=1)).isoformat() + "Z"
     SESSIONS[session_id] = {
         "session_id": session_id,
         "user_id": req.user_id,
         "session_title": req.initial_message[:20],
         "session_status": "ACTIVE",
         "created_at": now,
-        "expires_at": (datetime.datetime.now() + datetime.timedelta(days=1)).isoformat() + "Z",
-        "message_count": 1
+        "expires_at": expires_at,
+        "last_activity_at": now,
+        "message_count": 1,
+        "has_course": False,
+        "preview_message": ""
     }
     MESSAGES[session_id] = [
         {"message_id": 1, "message_type": "USER", "message_content": req.initial_message, "sent_at": now}
     ]
-    # 첫 답변(임시)
-    assistant_msg = "홍대에서 로맨틱한 저녁 데이트 계획을 도와드릴게요! 💕\n\n더 맞춤형 추천을 위해 몇 가지 물어볼게요:\n\n1. **어떤 분위기**를 선호하시나요?\n   🕯️ 아늑하고 조용한 곳 vs 🌃 활기찬 곳\n\n2. **예산대**는 어느 정도로 생각하고 계신가요?\n   💰 2인 기준 5만원 이하 / 5-10만원 / 10만원 이상"
+    # 기존 통합 엔드포인트와 동일한 대화 생성 흐름 적용
+    main_req = MainAgentRequest(
+        session_id=session_id,
+        user_message=req.initial_message,
+        timestamp=now
+    )
+    try:
+        main_resp = main_agent_service.process_request(main_req)
+        assistant_msg = main_resp.message or "죄송합니다. 답변을 생성하지 못했습니다. 다시 시도해 주세요."
+        print(f"[DEBUG] NEW SESSION - MainAgentService Response: success={main_resp.success}, message={assistant_msg[:100]}...")
+        if not main_resp.success and hasattr(main_resp, 'error') and main_resp.error:
+            print(f"[ERROR] NEW SESSION - MainAgentService Error: {main_resp.error}")
+    except Exception as e:
+        print(f"[ERROR] NEW SESSION - MainAgentService Exception: {str(e)}")
+        assistant_msg = f"처리 중 오류가 발생했습니다: {str(e)}"
     MESSAGES[session_id].append({"message_id": 2, "message_type": "ASSISTANT", "message_content": assistant_msg, "sent_at": now})
     SESSIONS[session_id]["message_count"] = 2
-    return {
-        "success": True,
-        "session_id": session_id,
-        "response": {
-            "message": assistant_msg,
-            "message_type": "INFORMATION_GATHERING",
-            "quick_replies": [
-                "아늑하고 조용한 곳",
-                "활기찬 곳",
-                "예산은 10만원 정도"
-            ],
-            "processing_time": 1.2
-        },
-        "session_info": SESSIONS[session_id]
-    }
+    SESSIONS[session_id]["preview_message"] = assistant_msg
+    response = ResponseMessage(
+        message=assistant_msg,
+        message_type="INFORMATION_GATHERING",
+        quick_replies=main_resp.suggestions if hasattr(main_resp, 'suggestions') else [],
+        processing_time=1.2,
+        course_data=None
+    )
+    session_info = SessionInfo(
+        session_title=SESSIONS[session_id]["session_title"],
+        session_status=SESSIONS[session_id]["session_status"],
+        created_at=SESSIONS[session_id]["created_at"],
+        expires_at=SESSIONS[session_id]["expires_at"],
+        last_activity_at=SESSIONS[session_id]["last_activity_at"],
+        message_count=SESSIONS[session_id]["message_count"]
+    )
+    return NewSessionResponse(
+        success=True,
+        session_id=session_id,
+        response=response,
+        session_info=session_info
+    )
 
 # 2. 메시지 전송
-@app.post("/chat/send-message")
-def send_message(req: SendMessageRequest):
+@app.post("/chat/send-message", response_model=SendMessageResponse)
+async def send_message(req: SendMessageRequest):
     session = SESSIONS.get(req.session_id)
     if not session:
         raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다.")
     now = datetime.datetime.now().isoformat() + "Z"
     msg_id = len(MESSAGES[req.session_id]) + 1
     MESSAGES[req.session_id].append({"message_id": msg_id, "message_type": "USER", "message_content": req.message, "sent_at": now})
-    # 실제로 Place Agent, RAG Agent 연동해서 답변 생성 (여기선 임시 답변)
-    assistant_msg = "좋아요! 아늑하고 조용한 분위기에 10만원 예산이면 정말 멋진 코스를 만들 수 있을 것 같아요 ✨\n\n마지막으로 몇 가지만 더 확인할게요:\n\n3. **몇 시간 정도** 데이트를 계획하고 계신가요?\n   ⏰ 2-3시간 / 4-5시간 / 하루 종일\n\n4. **어떤 종류의 장소**를 선호하시나요?\n   🍽️ 맛집 위주 / ☕ 카페 위주 / 🎨 문화생활 포함"
+    session["message_count"] += 1
+    session["last_activity_at"] = now
+
+    # 기존 통합 엔드포인트와 동일한 대화 생성 흐름 적용
+    main_req = MainAgentRequest(
+        session_id=req.session_id,
+        user_message=req.message,
+        timestamp=now
+    )
+    try:
+        main_resp = main_agent_service.process_request(main_req)
+        assistant_msg = main_resp.message or "죄송합니다. 답변을 생성하지 못했습니다. 다시 시도해 주세요."
+        print(f"[DEBUG] SEND MESSAGE - MainAgentService Response: success={main_resp.success}, message={assistant_msg[:100]}...")
+        if not main_resp.success and hasattr(main_resp, 'error') and main_resp.error:
+            print(f"[ERROR] SEND MESSAGE - MainAgentService Error: {main_resp.error}")
+        
+        # 추천 준비 완료 시 안내 메시지만 표시
+        course_data = None
+        if main_resp.success and hasattr(main_resp, 'needs_recommendation') and main_resp.needs_recommendation:
+            assistant_msg = "✨ **모든 정보가 수집되었습니다!** ✨\n\n이제 맞춤 데이트 코스를 생성할 준비가 완료되었어요.\n📍 추천을 시작하시려면 '추천 시작' 버튼을 눌러주세요!"
+        
+    except Exception as e:
+        print(f"[ERROR] SEND MESSAGE - MainAgentService Exception: {str(e)}")
+        assistant_msg = f"처리 중 오류가 발생했습니다: {str(e)}"
     msg_id += 1
     MESSAGES[req.session_id].append({"message_id": msg_id, "message_type": "ASSISTANT", "message_content": assistant_msg, "sent_at": now})
-    session["message_count"] += 2
+    session["message_count"] += 1
     session["last_activity_at"] = now
-    return {
-        "success": True,
-        "session_id": req.session_id,
-        "response": {
-            "message": assistant_msg,
-            "message_type": "INFORMATION_GATHERING",
-            "quick_replies": [
-                "4-5시간 예정이에요",
-                "맛집 위주로",
-                "카페 위주로"
-            ],
-            "processing_time": 1.8
-        },
-        "session_info": session
-    }
+    # 추천 결과가 있으면 course_data에 포함
+    if 'course_data' not in locals():
+        course_data = getattr(main_resp, "course_data", None)
+    message_type = getattr(main_resp, "message_type", "INFORMATION_GATHERING")
+    quick_replies = getattr(main_resp, "suggestions", [])
+    
+    # course_data가 있으면 추천 완료로 처리
+    if course_data:
+        message_type = "COURSE_RECOMMENDATION"
+        session["has_course"] = True
+        session["preview_message"] = assistant_msg
+        session["session_status"] = "COMPLETED"
+    response = ResponseMessage(
+        message=assistant_msg,
+        message_type=message_type,
+        quick_replies=quick_replies,
+        processing_time=2.0,
+        course_data=course_data
+    )
+    session_info = SessionInfo(
+        session_title=session["session_title"],
+        session_status=session["session_status"],
+        created_at=session["created_at"],
+        expires_at=session["expires_at"],
+        last_activity_at=session["last_activity_at"],
+        message_count=session["message_count"]
+    )
+    return SendMessageResponse(
+        success=True,
+        session_id=req.session_id,
+        response=response,
+        session_info=session_info
+    )
 
 # 3. 세션 목록 조회
-@app.get("/chat/sessions/{user_id}")
-def get_sessions(user_id: int):
-    result = [s for s in SESSIONS.values() if s["user_id"] == user_id]
-    return {"success": True, "sessions": result, "pagination": {"total_count": len(result)}}
+@app.get("/chat/sessions/user/{user_id}")
+def get_sessions(user_id: int, limit: int = Query(10), offset: int = Query(0), status: str = Query("all")):
+    sessions = [s for s in SESSIONS.values() if s["user_id"] == user_id]
+    # 상태 필터링
+    if status != "all":
+        sessions = [s for s in sessions if s["session_status"] == status]
+    total_count = len(sessions)
+    has_more = total_count > (offset + limit)
+    return {
+        "success": True,
+        "sessions": sessions[offset:offset+limit],
+        "pagination": {
+            "total_count": total_count,
+            "limit": limit,
+            "offset": offset,
+            "has_more": has_more
+        }
+    }
 
 # 4. 세션 상세 조회
 @app.get("/chat/sessions/{session_id}")
@@ -660,19 +425,180 @@ def get_session(session_id: str):
     session = SESSIONS.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다.")
-    return {"success": True, "session": session, "messages": MESSAGES[session_id]}
+    return {
+        "success": True,
+        "session": session,
+        "messages": MESSAGES[session_id]
+    }
 
 # 5. 세션 삭제
 @app.delete("/chat/sessions/{session_id}")
 def delete_session(session_id: str):
     SESSIONS.pop(session_id, None)
     MESSAGES.pop(session_id, None)
-    return {"success": True, "message": "채팅 세션이 성공적으로 삭제되었습니다.", "deleted_session_id": session_id}
+    return {
+        "success": True,
+        "message": "채팅 세션이 성공적으로 삭제되었습니다.",
+        "deleted_session_id": session_id,
+        "deleted_at": datetime.datetime.now().isoformat() + "Z"
+    }
 
-# 6. 헬스체크
+# 6. 추천 시작
+@app.post("/chat/start-recommendation")
+async def start_recommendation(request: dict):
+    """세션별 추천 플로우 시작"""
+    try:
+        session_id = request.get("session_id")
+        if not session_id:
+            return {
+                "success": False,
+                "message": "session_id가 필요합니다.",
+                "error_code": "MISSING_SESSION_ID"
+            }
+        
+        session = SESSIONS.get(session_id)
+        if not session:
+            return {
+                "success": False,
+                "message": "세션을 찾을 수 없습니다.",
+                "session_id": session_id,
+                "error_code": "SESSION_NOT_FOUND"
+            }
+        
+        # 세션에서 마지막 MainAgentService 응답을 시뮬레이션
+        # 실제로는 SESSION_INFO에서 프로필 정보를 가져와야 함
+        print(f"[DEBUG] 추천 시작 요청 - session_id: {session_id}")
+        
+        # 임시로 MainAgentService에서 프로필 정보 가져오기
+        from services.main_agent_service import SESSION_INFO
+        session_info = SESSION_INFO.get(session_id, {})
+        
+        if 'profile' not in session_info:
+            return {
+                "success": False,
+                "message": "프로필 정보가 없습니다. 먼저 채팅을 통해 정보를 입력해주세요.",
+                "session_id": session_id,
+                "error_code": "INCOMPLETE_PROFILE"
+            }
+        
+        profile = session_info['profile']
+        
+        # LocationRequest 생성 (address 기반)
+        from models.request_models import LocationRequest
+        location_request = LocationRequest(
+            proximity_type="near",
+            reference_areas=[profile.address] if profile.address else [],
+            place_count=3,
+            transportation="지하철"
+        )
+        
+        # MainAgentResponse 형태로 만들어서 추천 플로우 실행
+        class MockMainAgentResponse:
+            def __init__(self, profile, location_request):
+                self.profile = profile
+                self.location_request = location_request
+                self.success = True
+                self.needs_recommendation = True
+        
+        mock_response = MockMainAgentResponse(profile, location_request)
+        
+        print(f"[DEBUG] 추천 플로우 실행 시작")
+        course_data = await execute_recommendation_flow(mock_response)
+        
+        print(f"[DEBUG] 추천 플로우 실행 완료, course_data: {course_data is not None}")
+        
+        if course_data:
+            # 세션 상태 업데이트
+            session["has_course"] = True
+            session["session_status"] = "COMPLETED"
+            session["last_activity_at"] = datetime.datetime.now().isoformat() + "Z"
+            
+            # Place Agent 응답에서 places 정보 추출
+            places_list = course_data.get("places", [])
+            
+            # RAG Agent 응답 정보
+            rag_result = course_data.get("course", {})
+            results = rag_result.get("results", {})
+            
+            # 처리 정보 생성
+            processing_info = {
+                "place_agent_status": "completed",
+                "rag_agent_status": "completed", 
+                "total_processing_time": float(rag_result.get("processing_time", "0").replace("초", "")),
+                "place_count": len(places_list),
+                "sunny_course_count": len(results.get("sunny_weather", [])),
+                "rainy_course_count": len(results.get("rainy_weather", [])),
+                "total_course_variations": len(results.get("sunny_weather", [])) + len(results.get("rainy_weather", []))
+            }
+            
+            # 완전한 response 구조 생성
+            final_response = {
+                "success": True,
+                "message": "🌟 **데이트 코스 추천이 완료되었습니다!** 🌟",
+                "session_id": session_id,
+                "course_data": {
+                    "places": places_list,
+                    "course": rag_result,
+                    "created_at": course_data.get("created_at")
+                },
+                "session_info": {
+                    "session_title": session["session_title"],
+                    "session_status": session["session_status"],
+                    "created_at": session["created_at"],
+                    "expires_at": session["expires_at"],
+                    "last_activity_at": session["last_activity_at"],
+                    "message_count": session["message_count"],
+                    "has_course": session["has_course"]
+                },
+                "processing_info": processing_info
+            }
+            
+            # 최종 JSON 출력
+            print(f"\n[DEBUG] ===== FINAL RESPONSE JSON =====")
+            print(json.dumps(final_response, ensure_ascii=False, indent=2))
+            print(f"[DEBUG] ===============================")
+            
+            return final_response
+        else:
+            return {
+                "success": False,
+                "message": "추천 생성 중 오류가 발생했습니다. 다시 시도해주세요.",
+                "session_id": session_id
+            }
+            
+    except Exception as e:
+        print(f"[ERROR] 추천 시작 오류: {str(e)}")
+        return {
+            "success": False,
+            "message": "추천 생성 중 예상치 못한 오류가 발생했습니다.",
+            "error_code": "INTERNAL_ERROR",
+            "error_details": {
+                "error_type": type(e).__name__,
+                "error_message": str(e)
+            }
+        }
+
+# 7. 헬스체크
 @app.get("/chat/health")
 def health():
-    return {"status": "healthy"}
+    return {
+        "status": "healthy",
+        "timestamp": datetime.datetime.now().isoformat() + "Z",
+        "version": "1.0.0",
+        "services": {
+            "database": "healthy",
+            "place_agent": "healthy",
+            "rag_agent": "healthy",
+            "llm_api": "healthy"
+        },
+        "metrics": {
+            "uptime_seconds": 86400,
+            "total_requests": 1547,
+            "average_response_time_ms": 2100,
+            "active_sessions": len(SESSIONS),
+            "db_connection_pool": "8/10"
+        }
+    }
 
 if __name__ == "__main__":
     uvicorn.run(

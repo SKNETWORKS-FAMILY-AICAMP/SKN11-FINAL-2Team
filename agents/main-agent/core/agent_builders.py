@@ -34,7 +34,7 @@ def build_place_agent_json(profile, location_request, max_travel_time=30):
     requirements = {
         "budget_level": map_budget(profile.get("budget")),
         "time_preference": profile.get("time_slot"),
-        "transportation": map_transportation(location_request.get("transportation")),
+        "transportation": map_transportation(profile.get("transportation")),
         "max_travel_time": max_travel_time,
         "weather_condition": None
     }
@@ -56,7 +56,7 @@ def build_place_agent_json(profile, location_request, max_travel_time=30):
         "location_request": {
             "proximity_type": location_request.get("proximity_type"),
             "reference_areas": location_request.get("reference_areas"),
-            "place_count": location_request.get("place_count"),
+            "place_count": profile.get("place_count", 3),
             "proximity_preference": location_request.get("proximity_preference")
         },
         "user_context": {
@@ -146,7 +146,7 @@ def build_rag_agent_json(place_response, profile, location_request, openai_api_k
         "budget_range": profile.get("budget"),
         "time_preference": profile.get("time_slot"),
         "party_size": 2,
-        "transportation": location_request.get("transportation")
+        "transportation": profile.get("transportation")
     }
     
     user_ctx = {

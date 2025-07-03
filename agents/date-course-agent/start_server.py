@@ -66,16 +66,19 @@ async def root():
     return {"message": "Date Course Recommendation Agent is running"}
 
 if __name__ == "__main__":
+    # 포트 설정 (환경변수 우선)
+    port = int(os.getenv("DATE_COURSE_AGENT_PORT", "8003"))
+    
     print("🚀 FastAPI 서버를 시작합니다...")
-    print("   - URL: http://localhost:8002")
-    print("   - 문서: http://localhost:8002/docs")
+    print(f"   - URL: http://localhost:{port}")
+    print(f"   - 문서: http://localhost:{port}/docs")
     print("   - 종료: Ctrl+C\n")
     
     # 서버 실행
     uvicorn.run(
         app,
         host="0.0.0.0",
-        port=8002,
+        port=port,
         log_level="info",
         reload=False  # 개발 중이 아니므로 reload 비활성화
     )

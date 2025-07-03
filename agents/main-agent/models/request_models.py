@@ -1,22 +1,22 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 
 class UserProfile(BaseModel):
-    age: str = ""
-    gender: str = ""
-    mbti: str = ""
-    address: str = ""
-    relationship_stage: str = ""
-    atmosphere: str = ""
-    budget: str = ""
-    time_slot: str = ""
-    
-    # 선택 사항들
+    gender: Optional[str] = ""
+    age: Optional[int] = None
+    mbti: Optional[str] = ""
+    address: Optional[str] = ""
     car_owned: Optional[bool] = None
-    description: Optional[str] = None
-    general_preferences: Optional[List[str]] = None
+    description: Optional[str] = ""
+    relationship_stage: Optional[str] = ""
+    general_preferences: Optional[List[str]] = []
+    profile_image_url: Optional[str] = ""
+    # 추가 데이트 정보 필드
+    atmosphere: Optional[str] = ""
+    budget: Optional[str] = ""
+    time_slot: Optional[str] = ""
+    transportation: Optional[str] = ""
     place_count: Optional[int] = 3
-    profile_image_url: Optional[str] = None
 
 class LocationRequest(BaseModel):
     proximity_type: str = ""
@@ -35,3 +35,14 @@ class MainAgentRequest(BaseModel):
     session_id: Optional[str] = None
     max_travel_time: int = 30
     course_planning: Optional[CoursePlanning] = None
+
+class NewSessionRequest(BaseModel):
+    user_id: int
+    initial_message: str
+    user_profile: UserProfile
+
+class SendMessageRequest(BaseModel):
+    session_id: str
+    message: str
+    user_id: int
+    user_profile: UserProfile
