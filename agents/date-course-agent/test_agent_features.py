@@ -126,7 +126,7 @@ async def run_feature_tests_via_http():
 
         test_request_rainy = test_request_sunny.copy()
         test_request_rainy["request_id"] = "test-rainy-yongsan-002"
-        test_request_rainy["timestamp"] = datetime.datetime.now().isoformat() + 'Z' # 현재 시간 timestamp 추가
+        test_request_rainy["timestamp"] = datetime.now().isoformat() + 'Z' # 현재 시간 timestamp 추가
 
         try:
             response_rainy = await client.post("/recommend-course", json=test_request_rainy, timeout=30.0)

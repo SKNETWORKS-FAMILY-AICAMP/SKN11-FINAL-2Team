@@ -133,7 +133,7 @@ async def main():
     # 테스트 데이터
     test_request = {
         "request_id": "test-place-001",
-        "timestamp": datetime.datetime.now().isoformat(),
+        "timestamp": datetime.now().isoformat(),
         "request_type": "proximity_based",
         "location_request": {
             "proximity_type": "near",

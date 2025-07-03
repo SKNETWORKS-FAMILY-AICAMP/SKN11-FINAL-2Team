@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from typing import Dict, List, Optional
 import uuid
 import datetime
+import json
 
 from main_agent import MainAgent
 from models.request_models import MainAgentRequest
@@ -166,12 +167,19 @@ async def start_recommendation(request: dict):
             
             # Place Agent API 호출
             place_agent_url = f"{PLACE_AGENT_URL}/place-agent"
+            print("\n[PlaceAgent Request] ↓↓↓")
+            print(json.dumps(place_request, ensure_ascii=False, indent=2))
             place_response = requests.post(
                 place_agent_url,
                 json=place_request,
                 headers={"Content-Type": "application/json"},
                 timeout=30
             )
+            print("[PlaceAgent Response] ↑↑↑")
+            try:
+                print(json.dumps(place_response.json(), ensure_ascii=False, indent=2))
+            except Exception:
+                print(place_response.text)
             
             if place_response.status_code == 200:
                 place_result = place_response.json()
@@ -217,7 +225,8 @@ async def start_recommendation(request: dict):
                 location_request=location_dict,
                 openai_api_key=os.getenv("OPENAI_API_KEY")
             )
-            
+            print("\n[RagAgent Request] ↓↓↓")
+            print(json.dumps(rag_request, ensure_ascii=False, indent=2))
             # RAG Agent API 호출
             rag_agent_url = f"{RAG_AGENT_URL}/recommend-course"
             rag_response = requests.post(
@@ -226,6 +235,11 @@ async def start_recommendation(request: dict):
                 headers={"Content-Type": "application/json"},
                 timeout=60
             )
+            print("[RagAgent Response] ↑↑↑")
+            try:
+                print(json.dumps(rag_response.json(), ensure_ascii=False, indent=2))
+            except Exception:
+                print(rag_response.text)
             
             if rag_response.status_code == 200:
                 rag_result = rag_response.json()

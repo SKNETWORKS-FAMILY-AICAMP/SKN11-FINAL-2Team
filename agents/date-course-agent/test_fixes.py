@@ -16,7 +16,7 @@ async def test_fixed_issues():
     # 간단한 테스트 요청 데이터
     test_request = {
         "request_id": "test-fixed-001",
-        "timestamp": datetime.datetime.now().isoformat() + 'Z',
+        "timestamp": datetime.now().isoformat() + 'Z',
         "search_targets": [
             {
                 "sequence": 1,

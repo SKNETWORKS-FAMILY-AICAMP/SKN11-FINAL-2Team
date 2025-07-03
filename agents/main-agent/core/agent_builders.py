@@ -46,7 +46,7 @@ def build_place_agent_json(profile, location_request, max_travel_time=30):
     }
     
     request_id = f"req-{str(uuid.uuid4())[:8]}"
-    timestamp = datetime.datetime.now().isoformat(timespec="seconds")
+    timestamp = datetime.now().isoformat(timespec="seconds")
     request_type = "proximity_based"
     
     place_json = {
@@ -209,7 +209,7 @@ def build_rag_agent_json(place_response, profile, location_request, openai_api_k
     
     rag_json = {
         "request_id": place_response["request_id"],
-        "timestamp": datetime.datetime.now().isoformat(timespec="seconds"),
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
         "search_targets": search_targets,
         "user_context": user_ctx,
         "course_planning": course_planning

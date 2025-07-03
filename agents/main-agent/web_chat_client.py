@@ -36,14 +36,14 @@ class WebChatClient:
         chat_data = {
             "session_id": self.session_id,
             "user_message": message,
-            "timestamp": datetime.datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat()
         }
         
         # 대화 히스토리에 추가
         self.conversation_history.append({
             "role": "user",
             "content": message,
-            "timestamp": datetime.datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat()
         })
         
         try:
@@ -65,7 +65,7 @@ class WebChatClient:
                 self.conversation_history.append({
                     "role": "assistant", 
                     "content": result,
-                    "timestamp": datetime.datetime.now().isoformat()
+                    "timestamp": datetime.now().isoformat()
                 })
                 
                 return result

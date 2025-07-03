@@ -1,0 +1,26 @@
+{
+  "profile": {
+    "age": "29",
+    "gender": "남",
+    "mbti": "INTP",
+    "address": "이촌동",
+    "relationship_stage": "연인",
+    "atmosphere": "로맨틱",
+    "budget": "",
+    "time_slot": "밤",
+    "car_owned": null,
+    "description": null,
+    "general_preferences": null,
+    "place_count": 3,
+    "profile_image_url": null
+  },
+  "location_request": {
+    "proximity_type": "exact",
+    "reference_areas": [
+      "이촌동"
+    ],
+    "place_count": 3,
+    "proximity_preference": null,
+    "transportation": "도보"
+  }
+}

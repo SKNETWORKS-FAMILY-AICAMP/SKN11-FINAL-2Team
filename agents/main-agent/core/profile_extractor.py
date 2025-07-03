@@ -8,12 +8,18 @@ REQUIRED_KEYS = [
 ]
 
 def rule_based_gender_relationship(user_message, extracted):
-    """여자친구/남자친구 등에서 성별 및 관계 추론"""
-    if not extracted.get("gender") or extracted["gender"] == "":
-        if re.search(r"여자친구", user_message):
-            extracted["gender"] = "남"
-        elif re.search(r"남자친구", user_message):
+    """여자친구/남자친구 등에서 성별 및 관계 추론 및 정규화"""
+    # LLM이 '여자', '남자' 등으로 추출한 경우도 정규화
+    if extracted.get("gender"):
+        if extracted["gender"] in ["여자", "여성", "여자사람"]:
             extracted["gender"] = "여"
+        elif extracted["gender"] in ["남자", "남성", "남자사람"]:
+            extracted["gender"] = "남"
+    # 여자친구/남자친구 키워드가 있으면 무조건 덮어씀
+    if re.search(r"여자친구", user_message):
+        extracted["gender"] = "남"
+    elif re.search(r"남자친구", user_message):
+        extracted["gender"] = "여"
     
     if not extracted.get("relationship_stage") or extracted["relationship_stage"] == "":
         if re.search(r"여자친구|남자친구", user_message):

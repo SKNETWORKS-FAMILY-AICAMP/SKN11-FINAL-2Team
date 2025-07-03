@@ -461,7 +461,7 @@ def main():
             # 샘플 RAG 요청 데이터 생성
             sample_rag_request = {
                 "request_id": "test-rag-001",
-                "timestamp": datetime.datetime.now().isoformat(),
+                "timestamp": datetime.now().isoformat(),
                 "search_targets": [
                     {
                         "sequence": 1,
@@ -500,7 +500,7 @@ def main():
         # 샘플 RAG 요청 데이터 생성
         sample_rag_request = {
             "request_id": "test-rag-002",
-            "timestamp": datetime.datetime.now().isoformat(),
+            "timestamp": datetime.now().isoformat(),
             "search_targets": [
                 {
                     "sequence": 1,
@@ -546,7 +546,7 @@ def main():
         # 샘플 RAG 요청 데이터 생성
         sample_rag_request = {
             "request_id": "test-rag-003",
-            "timestamp": datetime.datetime.now().isoformat(),
+            "timestamp": datetime.now().isoformat(),
             "search_targets": [
                 {
                     "sequence": 1,

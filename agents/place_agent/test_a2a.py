@@ -93,7 +93,7 @@ async def main():
             "name": "홍대 근처 3곳 (ENFP 연인)",
             "data": {
                 "request_id": "test-001",
-                "timestamp": datetime.datetime.now().isoformat(),
+                "timestamp": datetime.now().isoformat(),
                 "request_type": "proximity_based",
                 "location_request": {
                     "proximity_type": "near",
@@ -123,7 +123,7 @@ async def main():
             "name": "강남 근처 2곳 (INTJ 썸)",
             "data": {
                 "request_id": "test-002", 
-                "timestamp": datetime.datetime.now().isoformat(),
+                "timestamp": datetime.now().isoformat(),
                 "request_type": "proximity_based",
                 "location_request": {
                     "proximity_type": "near",
@@ -153,7 +153,7 @@ async def main():
             "name": "성수 근처 4곳 (ESFP 친구)",
             "data": {
                 "request_id": "test-003",
-                "timestamp": datetime.datetime.now().isoformat(),
+                "timestamp": datetime.now().isoformat(),
                 "request_type": "proximity_based", 
                 "location_request": {
                     "proximity_type": "near",
