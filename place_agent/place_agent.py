@@ -87,12 +87,6 @@ AREA_CENTERS = {
         "vibe": "세련되고 모던한",
         "keywords": ["고급 레스토랑", "루프탑바", "쇼핑몰", "스타일리시한 카페"]
     },
-    "강남역": {
-        "lat": 37.4982, "lng": 127.0274,
-        "signature_traits": ["교통허브중심", "지하상가", "만남의장소"],
-        "vibe": "바쁘고 활기찬",
-        "keywords": ["지하상가", "교통중심", "쇼핑", "만남의 장소"]
-    },
     "이태원": {
         "lat": 37.5344, "lng": 126.9947,
         "signature_traits": ["이국적분위기", "글로벌다이닝", "루프탑뷰"],
@@ -362,87 +356,100 @@ class PlaceAgent:
     async def get_multiple_coordinates_for_area(self, area_name: str, count: int, user_context: UserContext) -> List[Dict]:
         """같은 지역 내에서 여러 세부 위치 좌표 조회"""
         results = []
+        
         # 1. 기본 지역 정보 먼저 조회
         base_info = await self.get_coordinates_from_kakao(area_name, user_context)
         if base_info:
             results.append({
                 **base_info,
-                "sub_location": f"{area_name} 중심가",
-                "detail": "메인 상권 지역"
+                "sub_location": area_name,  # "중심가" 제거
+                "detail": "메인 지역"
             })
+        
         if not self.kakao_api_key or len(results) >= count:
             return results[:count]
-        # 2. 같은 지역의 다른 세부 위치들 검색
-        search_variations = [
-            f"{area_name} 공원",  
-            f"{area_name} 관광명소",
-            f"{area_name} 맛집",
-            f"{area_name} 까페",
-            f"{area_name} 주점",
-        ]
+        
+        # 2. 해당 지역 대표 장소들 검색
         try:
             headers = {"Authorization": f"KakaoAK {self.kakao_api_key}"}
             async with httpx.AsyncClient() as client_session:
-                for variation in search_variations:
-                    if len(results) >= count:
-                        break
-                    response = await client_session.get(
-                        "https://dapi.kakao.com/v2/local/search/keyword.json",
-                        params={"query": variation + " 서울", "size": 3},
-                        headers=headers
-                    )
-                    if response.status_code == 200:
-                        data = response.json()
-                        for place in data.get("documents", []):
-                            if len(results) >= count:
+                response = await client_session.get(
+                    "https://dapi.kakao.com/v2/local/search/keyword.json",
+                    params={
+                        "query": f"서울 {area_name}",  # 핵심 변경!
+                        "size": 10  # 충분한 결과 확보
+                    },
+                    headers=headers
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+
+                    print(f"검색어: 서울 {area_name}")
+                    print(f"검색 결과: {[place.get('place_name') for place in data.get('documents', [])]}")
+                    
+                    for place in data.get("documents", []):
+                        if len(results) >= count:
+                            break
+                            
+                        lat, lng = float(place["y"]), float(place["x"])
+                        
+                        # 기존 좌표와 중복 체크
+                        is_duplicate = False
+                        for existing in results:
+                            distance = math.sqrt(
+                                (lat - existing["lat"]) ** 2 +
+                                (lng - existing["lng"]) ** 2
+                            ) * 111000
+                            if distance < 100:
+                                is_duplicate = True
                                 break
-                            lat, lng = float(place["y"]), float(place["x"])
-                            # 기존 좌표와 너무 가깝지 않은지 체크 (최소 100m 거리)
-                            is_duplicate = False
-                            for existing in results:
-                                distance = math.sqrt(
-                                    (lat - existing["lat"]) ** 2 +
-                                    (lng - existing["lng"]) ** 2
-                                ) * 111000  # 대략적인 미터 변환
-                                if distance < 100:  # 100m 이내면 중복으로 간주
-                                    is_duplicate = True
-                                    break
-                            if not is_duplicate:
-                                # 새로운 지역인 경우 LLM 분석
-                                if area_name not in AREA_CENTERS and user_context:
-                                    area_analysis = await self.analyze_new_area_characteristics(area_name, user_context)
-                                    llm_reason = area_analysis["reason"]
-                                    signature_traits = area_analysis["signature_traits"]
-                                    vibe = area_analysis["vibe"]
-                                else:
-                                    area_info = AREA_CENTERS.get(area_name, {})
-                                    llm_reason = None
-                                    signature_traits = area_info.get("signature_traits", ["일반지역"])
-                                    vibe = area_info.get("vibe", "특별한")
-                                results.append({
-                                    "lat": lat,
-                                    "lng": lng,
-                                    "signature_traits": signature_traits,
-                                    "vibe": vibe,
-                                    "keywords": signature_traits,
-                                    "llm_reason": llm_reason,
-                                    "sub_location": place.get("place_name", f"{area_name} 주변"),
-                                    "detail": f"{place.get('category_name', '장소')} 근처"
-                                })
+                        
+                        if not is_duplicate:
+                            # 지역 정보 설정
+                            if area_name not in AREA_CENTERS and user_context:
+                                area_analysis = await self.analyze_new_area_characteristics(area_name, user_context)
+                                llm_reason = area_analysis["reason"]
+                                signature_traits = area_analysis["signature_traits"]
+                                vibe = area_analysis["vibe"]
+                            else:
+                                area_info = AREA_CENTERS.get(area_name, {})
+                                llm_reason = None
+                                signature_traits = area_info.get("signature_traits", ["일반지역"])
+                                vibe = area_info.get("vibe", "특별한")
+                            
+                            results.append({
+                                "lat": lat,
+                                "lng": lng,
+                                "signature_traits": signature_traits,
+                                "vibe": vibe,
+                                "keywords": signature_traits,
+                                "llm_reason": llm_reason,
+                                "sub_location": place.get("place_name", f"{area_name} 주변"),
+                                "detail": place.get("category_name", "장소")
+                            })
+                            
+            print(f"검색어: 서울 {area_name}")
+            print(f"검색 결과: {[place.get('place_name') for place in data.get('documents', [])]}")
         except Exception as e:
-            print(f"세부 위치 검색 실패: {e}")
-        # 부족한 만큼 기본 위치 주변으로 약간씩 변경해서 채우기
+            print(f"대표 장소 검색 실패: {e}")
+        
+        # 부족한 경우 offset으로 채우기
         while len(results) < count and base_info:
-            offset_lat = base_info["lat"] + (len(results) * 0.001)  # 약 100m씩 offset
-            offset_lng = base_info["lng"] + (len(results) * 0.001)
+            offset_count = len(results)
+            offset_lat = base_info["lat"] + (offset_count * 0.0005)
+            offset_lng = base_info["lng"] + (offset_count * 0.0005)
+            
             results.append({
                 **base_info,
                 "lat": offset_lat,
                 "lng": offset_lng,
-                "sub_location": f"{area_name} {len(results)+1}번 구역",
-                "detail": f"{area_name} 주변 지역"
+                "sub_location": f"{area_name} {offset_count}",  # 간단하게
+                "detail": f"{area_name} 주변"
             })
+        
         return results[:count]
+
 
     async def get_coordinates_from_kakao(self, area_name: str, user_context: Optional[UserContext] = None) -> Optional[Dict]:
         """하이브리드 지역 정보 조회 - 기존 데이터 우선, 새 지역은 LLM 분석"""
@@ -723,56 +730,6 @@ async def health_check():
 async def get_available_areas():
     """사용 가능한 지역 목록 반환"""
     return {"areas": list(AREA_CENTERS.keys())}
-
-@app.post("/test-llm")
-async def test_llm_analysis(request: PlaceAgentRequest):
-    """LLM 분석 테스트용 엔드포인트"""
-    try:
-        llm_result = await place_agent.analyze_with_llm(request)
-        return {
-            "success": True,
-            "llm_areas": llm_result.get("areas", []),
-            "llm_reasons": llm_result.get("reasons", []),
-            "prompt": place_agent.create_analysis_prompt(request)
-        }
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-@app.post("/test-hybrid")
-async def test_hybrid_analysis(request: PlaceAgentRequest):
-    """하이브리드 지역 분석 테스트용 엔드포인트 - 정해진 응답 형식 준수"""
-    try:
-        # 새로운 지역으로 강제 테스트
-        test_areas = ["마포구", "서초구", "용산구"]
-        locations = []
-        
-        for i, area in enumerate(test_areas, 1):
-            area_info = await place_agent.get_coordinates_from_kakao(area, request.user_context)
-            if area_info:
-                reason = area_info.get("llm_reason", f"{area} 지역 추천")
-                locations.append(LocationResponse(
-                    sequence=i,
-                    area_name=area,
-                    coordinates=Coordinates(
-                        latitude=area_info["lat"],
-                        longitude=area_info["lng"]
-                    ),
-                    reason=reason
-                ))
-        
-        return PlaceAgentResponse(
-            request_id=request.request_id,
-            success=True,
-            locations=locations,
-            error_message=None
-        )
-    except Exception as e:
-        return PlaceAgentResponse(
-            request_id=request.request_id,
-            success=False,
-            locations=[],
-            error_message=str(e)
-        )
 
 if __name__ == "__main__":
     import uvicorn
