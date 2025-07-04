@@ -1,6 +1,6 @@
 """
 Place Agent Implementation
-지역 선정 및 좌표 반환 전문 서비스 (LLM 통합 + 하이브리드 확장)
+지역 선정 및 좌표 반환 전문 서비스
 """
 
 from fastapi import FastAPI, HTTPException
@@ -19,10 +19,38 @@ import math
 load_dotenv()
 
 # FastAPI 앱 초기화
-app = FastAPI(title="Place Agent", description="지역 분석 및 좌표 반환 서비스", version="2.0.0")
+app = FastAPI(title="Place Agent", description="지역 분석 및 좌표 반환 서비스", version="3.0.0")
 
 # OpenAI 클라이언트 초기화
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# 좌표 정확도 설정
+COORDINATE_PRECISION = 4  # 소수점 4자리로 고정
+MIN_DISTANCE_METERS = 200  # 최소 거리 200미터
+
+# 좌표 정규화 함수
+def normalize_coordinates(lat: float, lng: float) -> tuple:
+    """좌표를 지정된 정확도로 정규화"""
+    return (
+        round(float(lat), COORDINATE_PRECISION),
+        round(float(lng), COORDINATE_PRECISION)
+    )
+
+def calculate_distance(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """두 좌표 간 거리 계산 (미터 단위)"""
+    # Haversine 공식 사용
+    R = 6371000  # 지구 반지름 (미터)
+    
+    lat1_rad = math.radians(lat1)
+    lat2_rad = math.radians(lat2)
+    delta_lat = math.radians(lat2 - lat1)
+    delta_lng = math.radians(lng2 - lng1)
+    
+    a = (math.sin(delta_lat / 2) ** 2 +
+         math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(delta_lng / 2) ** 2)
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    
+    return R * c
 
 # 메인 에이전트 스펙에 맞춘 요청 모델들
 class LocationRequest(BaseModel):
@@ -73,163 +101,189 @@ class PlaceAgentResponse(BaseModel):
     locations: List[LocationResponse]
     error_message: Optional[str] = None
 
-# 서울 지역 중심 좌표 및 특성 데이터
-AREA_CENTERS = {
-    "홍대": {
-        "lat": 37.5563, "lng": 126.9233,
-        "signature_traits": ["젊은문화중심지", "자유로운예술가", "라이브음악"],
-        "vibe": "자유롭고 창의적인",
-        "keywords": ["클럽", "라이브 음악", "길거리 공연", "독특한 카페"]
-    },
-    "강남": {
-        "lat": 37.4982, "lng": 127.0274,
-        "signature_traits": ["세련된비즈니스가", "고급엔터테인먼트", "모던라이프스타일"],
-        "vibe": "세련되고 모던한",
-        "keywords": ["고급 레스토랑", "루프탑바", "쇼핑몰", "스타일리시한 카페"]
-    },
-    "이태원": {
-        "lat": 37.5344, "lng": 126.9947,
-        "signature_traits": ["이국적분위기", "글로벌다이닝", "루프탑뷰"],
-        "vibe": "글로벌하고 이색적인",
-        "keywords": ["다국적 음식", "이국적 분위기", "펜션카페", "루프탑 테라스"]
-    },
-    "성수": {
-        "lat": 37.5447, "lng": 127.0557,
-        "signature_traits": ["힙스터감성공간", "인더스트리얼카페", "아트갤러리"],
-        "vibe": "힙하고 트렌디한",
-        "keywords": ["인더스트리얼 카페", "갤러리", "공장 개조", "감성적인 공간"]
-    },
-    "연남": {
-        "lat": 37.5589, "lng": 126.9239,
-        "signature_traits": ["아늑한골목길", "감성브런치", "조용한데이트"],
-        "vibe": "아늑하고 감성적인",
-        "keywords": ["골목 카페", "아기자기한 상점", "감성 브런치", "조용한 분위기"]
-    },
-    "신촌": {
-        "lat": 37.5596, "lng": 126.9422,
-        "signature_traits": ["대학가활력", "젊은에너지", "친근한분위기"],
-        "vibe": "활기차고 친근한",
-        "keywords": ["저렴한 맛집", "학생 카페", "노래방", "활기찬 거리"]
-    },
-    "명동": {
-        "lat": 37.5636, "lng": 126.9826,
-        "signature_traits": ["전통현대조화", "관광명소", "쇼핑중심지"],
-        "vibe": "전통적이면서 현대적인",
-        "keywords": ["전통 찻집", "한옥 카페", "쇼핑", "관광 명소"]
-    },
-    "인사동": {
-        "lat": 37.5717, "lng": 126.9857,
-        "signature_traits": ["한국문화중심", "전통예술", "고즈넉한분위기"],
-        "vibe": "고즈넉하고 문화적인",
-        "keywords": ["전통차", "갤러리", "공예품", "한국 문화"]
-    },
-    "압구정": {
-        "lat": 37.5270, "lng": 127.0276,
-        "signature_traits": ["고급쇼핑문화", "럭셔리라이프", "프리미엄경험"],
-        "vibe": "고급스럽고 우아한",
-        "keywords": ["럭셔리 카페", "프리미엄 브런치", "디자이너 브랜드", "고급 베이커리"]
-    },
-    "건대": {
-        "lat": 37.5403, "lng": 127.0695,
-        "signature_traits": ["학생친화적공간", "24시간활력", "합리적선택"],
-        "vibe": "역동적이고 친근한",
-        "keywords": ["24시간 카페", "스터디 카페", "합리적 가격", "학생 친화적"]
-    },
-    "여의도": {
-        "lat": 37.5219, "lng": 126.9245,
-        "signature_traits": ["비즈니스금융중심", "한강뷰", "야경명소"],
-        "vibe": "현대적이고 세련된",
-        "keywords": ["한강공원", "고층빌딩", "금융가", "야경명소"]
-    },
-    "잠실": {
-        "lat": 37.5134, "lng": 127.1000,
-        "signature_traits": ["대형복합문화공간", "엔터테인먼트", "편의시설완비"],
-        "vibe": "활기차고 편리한",
-        "keywords": ["롯데월드", "쇼핑몰", "스카이타워", "복합문화공간"]
-    },
-    "고대": {
-        "lat": 37.5895, "lng": 127.0323,
-        "signature_traits": ["젊은학구적분위기", "대학가문화", "청춘에너지"],
-        "vibe": "젊고 학구적인",
-        "keywords": ["대학가", "학생문화", "저렴한식당", "스터디카페"]
-    }
-}
-
-# MBTI별 선호 지역 매핑
-MBTI_PREFERENCES = {
-    "E": ["홍대", "강남", "신촌", "건대"],  # 외향형
-    "I": ["연남", "성수", "인사동", "압구정"],  # 내향형
-    "N": ["성수", "홍대", "이태원", "연남"],  # 직관형
-    "S": ["명동", "인사동", "압구정", "강남"],  # 감각형
-    "T": ["강남", "압구정", "성수"],  # 사고형
-    "F": ["연남", "홍대", "인사동"],  # 감정형
-    "J": ["압구정", "명동", "인사동"],  # 판단형
-    "P": ["홍대", "성수", "이태원"]   # 인식형
-}
-
-# 관계단계별 추천 지역
-RELATIONSHIP_PREFERENCES = {
-    "썸": ["연남", "성수", "홍대", "이태원"],
-    "연인": ["강남", "이태원", "압구정", "홍대"],
-    "친구": ["홍대", "강남", "성수", "건대"]
-}
-
 class PlaceAgent:
     def __init__(self):
         self.kakao_api_key = os.getenv("KAKAO_API_KEY")
+        if not self.kakao_api_key:
+            print("⚠️ KAKAO_API_KEY가 설정되지 않았습니다. Kakao API 기능이 제한됩니다.")
 
-    def create_analysis_prompt(self, request: PlaceAgentRequest) -> str:
-        """LLM을 위한 지역 분석 프롬프트 생성 (하이브리드 - 기존지역 + 새지역)"""
+    async def get_coordinates_from_kakao(self, area_name: str) -> Optional[Dict]:
+        """Kakao API로 지역 정보 조회"""
+        if not self.kakao_api_key:
+            print(f"Kakao API 키가 없어 지역 조회 불가: {area_name}")
+            return None
+            
+        try:
+            headers = {"Authorization": f"KakaoAK {self.kakao_api_key}"}
+            async with httpx.AsyncClient() as client_session:
+                response = await client_session.get(
+                    "https://dapi.kakao.com/v2/local/search/keyword.json",
+                    params={
+                        "query": f"{area_name} 서울",
+                        "size": 1
+                    },
+                    headers=headers
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get("documents"):
+                        place = data["documents"][0]
+                        
+                        # 좌표 정규화
+                        lat, lng = normalize_coordinates(
+                            float(place["y"]), float(place["x"])
+                        )
+                        
+                        return {
+                            "lat": lat,
+                            "lng": lng,
+                            "address": place.get("address_name", ""),
+                            "place_name": place.get("place_name", area_name)
+                        }
+                        
+        except Exception as e:
+            print(f"Kakao API 요청 실패: {e}")
+        
+        return None
+
+    async def find_nearby_areas(self, center_lat: float, center_lng: float, radius_km: float = 3.0) -> List[Dict]:
+        """중심 좌표 주변 지역들 검색"""
+        if not self.kakao_api_key:
+            return []
+            
+        try:
+            headers = {"Authorization": f"KakaoAK {self.kakao_api_key}"}
+            nearby_areas = []
+            
+            async with httpx.AsyncClient() as client_session:
+                # 반경 내 장소들 검색 (여러 카테고리)
+                categories = ["CE7", "FD6", "CT1", "AT4", "PK6", "SW8"]
+                
+                for category in categories[:5]:  # 상위 5개 카테고리만
+                    response = await client_session.get(
+                        "https://dapi.kakao.com/v2/local/search/category.json",
+                        params={
+                            "category_group_code": category,
+                            "x": center_lng,
+                            "y": center_lat,
+                            "radius": int(radius_km * 1000),  # 미터 단위
+                            "size": 15,
+                            "sort": "distance"
+                        },
+                        headers=headers
+                    )
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        for place in data.get("documents", []):
+                            place_lat, place_lng = normalize_coordinates(
+                                float(place["y"]), float(place["x"])
+                            )
+                            
+                            # 중복 체크
+                            is_duplicate = False
+                            for existing in nearby_areas:
+                                if calculate_distance(
+                                    place_lat, place_lng,
+                                    existing["lat"], existing["lng"]
+                                ) < MIN_DISTANCE_METERS:
+                                    is_duplicate = True
+                                    break
+                            
+                            if not is_duplicate:
+                                # 지역명 추출 (주소에서)
+                                address_parts = place.get("address_name", "").split()
+                                area_name = ""
+                                if len(address_parts) >= 3:
+                                    area_name = address_parts[2]  # 동/면 단위
+                                elif len(address_parts) >= 2:
+                                    area_name = address_parts[1]  # 구 단위
+                                else:
+                                    area_name = place.get("place_name", "알 수 없는 지역")
+                                
+                                nearby_areas.append({
+                                    "lat": place_lat,
+                                    "lng": place_lng,
+                                    "area_name": area_name,
+                                    "place_name": place.get("place_name", ""),
+                                    "category": place.get("category_name", ""),
+                                    "address": place.get("address_name", ""),
+                                    "distance": calculate_distance(center_lat, center_lng, place_lat, place_lng)
+                                })
+                        
+                        if len(nearby_areas) >= 20:  # 충분한 후보 확보시 중단
+                            break
+            
+            # 거리순 정렬
+            nearby_areas.sort(key=lambda x: x["distance"])
+            return nearby_areas[:15]  # 상위 15개 반환
+            
+        except Exception as e:
+            print(f"주변 지역 검색 실패: {e}")
+            return []
+
+    def create_prompt_area_selection(self, request: PlaceAgentRequest, candidate_areas: List[Dict] = None, mode: str = "general") -> str:
+        """지역 선정을 위한 통합 LLM 프롬프트 생성"""
         user_ctx = request.user_context
         loc_req = request.location_request
-        
-        # 기존 정의된 지역들
-        predefined_areas = list(AREA_CENTERS.keys())
-        
+
         # null 값 처리
         budget = user_ctx.requirements.budget_level or "제한없음"
         transportation = user_ctx.requirements.transportation or loc_req.transportation or "제한없음"
-        
-        prompt = f"""당신은 서울 지역 분석 전문가입니다.
-사용자 요청에 맞는 최적의 서울 지역을 선정하고, 선정 이유를 자연스러운 문장으로 설명해주세요.
 
-사용자 정보:
-- 나이: {user_ctx.demographics.age}세
-- MBTI: {user_ctx.demographics.mbti}
-- 관계: {user_ctx.demographics.relationship_stage}
-- 선호사항: {', '.join(user_ctx.preferences) if user_ctx.preferences else '특별한 선호 없음'}
-- 예산: {budget}
-- 시간대: {user_ctx.requirements.time_preference}
-- 교통수단: {transportation}
+        # 후보 지역 정보 정리
+        if candidate_areas:
+            candidates_text = "\n".join([
+                f"- {area['area_name']} (유형: {area.get('category', '일반')}, 거리: {area['distance']:.0f}m)"
+                for area in candidate_areas
+            ])
+            target_text = "위 후보 장소들"
+        else:
+            candidates_text = "서울 전체 지역 (모든 구, 동, 주요 상권 포함)"
+            target_text = "서울 지역"
 
-위치 요청:
-- 타입: {loc_req.proximity_type}
-- 기준지역: {loc_req.reference_areas if loc_req.reference_areas else '없음'}
-- 필요개수: {loc_req.place_count}곳
+        prompt = f"""서울 지역/장소 추천 전문가로서 사용자에게 최적의 {"장소" if mode == "exact" else "지역"} {loc_req.place_count}곳을 추천해주세요.
 
-추천 우선순위:
-1. 기존 주요 지역: {', '.join(predefined_areas)}
-2. 서울 내 다른 지역도 가능 (예: 마포구, 서초구, 용산구, 성북구, 송파구, 영등포구 등)
+    사용자 정보:
+    - 나이: {user_ctx.demographics.age}세
+    - MBTI: {user_ctx.demographics.mbti}
+    - 관계: {user_ctx.demographics.relationship_stage}
+    - 선호사항: {', '.join(user_ctx.preferences) if user_ctx.preferences else '특별한 선호 없음'}
+    - 예산: {budget}
+    - 시간대: {user_ctx.requirements.time_preference}
+    - 교통수단: {transportation}
 
-요청:
-1. 위 조건에 맞는 서울 지역 {loc_req.place_count}곳을 선정하세요.
-2. 기존 주요 지역을 우선 고려하되, 사용자 요청에 더 적합한 다른 지역이 있다면 추천해주세요.
-3. 각 지역별로 선정 이유를 자연스러운 1~2문장으로 설명하세요.
-4. 교통 접근성(지하철역 등)도 함께 언급해주세요.
+    요청 모드: {mode}
+    - exact: 사용자 지정 지역 내 구체적 장소들
+    - near: 사용자 지정 지역 주변 지역들
+    - between: 두 지역 중간 지점 지역들
+    - multi: 사용자 요구사항에 맞는 서울 지역들
 
-응답 형식 (정확히 준수):
-지역명1|이곳은 ~한 이유로 추천합니다. ~해서 ~합니다.
-지역명2|이곳은 ~한 이유로 추천합니다. ~해서 ~합니다.
-지역명3|이곳은 ~한 이유로 추천합니다. ~해서 ~합니다.
+    기준 지역: {loc_req.reference_areas if loc_req.reference_areas else "없음"}
 
-예시:
-성수|이곳은 조용한 분위기와 감각적인 카페들이 많아 INTJ 성향의 편안한 대화를 즐기기에 적합하여 추천합니다. 또한, 지하철 2호선으로 접근성이 좋아서 이동이 편리합니다.
-마포구|이곳은 조용한 주거지역으로 {user_ctx.demographics.age}세 {user_ctx.demographics.relationship_stage}가 편안하게 대화할 수 있는 환경을 제공하여 추천합니다. 지하철 6호선과 공항철도로 접근이 용이합니다."""
-        
+    추천 대상:
+    {candidates_text}
+
+    선호 장소: 카페, 음식점, 공원, 문화시설, 관광명소, 쇼핑 지역
+    제외 장소: 은행, 안내센터, 공공기관, 주유소, 마트
+
+    요청 사항:
+    1. {target_text} 중에서 사용자에게 가장 적합한 {loc_req.place_count}곳 선정
+    2. 각각에 대한 추천 이유를 자연스럽게 1-2문장으로 설명
+    3. 사용자의 나이, MBTI, 관계, 선호사항, 시간대, 예산 모두 고려
+    4. 후보를 반환할때 똑같은 카테고리나 장소명이 겹치는 부분이 있다면 뒤에 출력되는 항목은 제외하고 다른 카테고리에서 후보 찾아서
+    5. 요청 모드를 꼭 준수할 것
+
+    응답 규칙 (반드시 준수):
+    1. 형식: "장소명|이유" (번호나 다른 기호 절대 사용 금지)
+    2. 다양성: 카페, 음식점, 공원, 문화시설 등 서로 다른 카테고리에서 선정
+    3. 중복 방지: 같은 브랜드나 비슷한 이름의 장소 금지"""
+
         return prompt
 
     def parse_llm_response(self, llm_text: str) -> Dict[str, List[str]]:
-        """LLM 응답을 파싱하여 지역명과 이유 추출 (하이브리드 지원)"""
+        """LLM 응답을 파싱하여 지역명과 이유 추출"""
         try:
             lines = [line.strip() for line in llm_text.strip().split('\n') if line.strip()]
             areas = []
@@ -241,8 +295,6 @@ class PlaceAgent:
                     if len(parts) == 2:
                         area = parts[0].strip()
                         reason = parts[1].strip()
-                        
-                        # 모든 지역 허용 (AREA_CENTERS에 없는 지역도 포함)
                         areas.append(area)
                         reasons.append(reason)
             
@@ -252,74 +304,15 @@ class PlaceAgent:
             print(f"LLM 응답 파싱 실패: {e}")
             return {"areas": [], "reasons": []}
 
-    async def analyze_new_area_characteristics(self, area_name: str, user_context: UserContext) -> Dict:
-        """새로운 지역에 대한 LLM 특성 분석"""
+    async def analyze_with_llm(self, prompt: str) -> Dict[str, List[str]]:
+        """LLM을 활용한 지역 분석"""
         try:
-            prompt = f"""'{area_name}' 지역에 대해 분석해주세요.
-
-사용자 정보:
-- 나이: {user_context.demographics.age}세
-- MBTI: {user_context.demographics.mbti}
-- 관계: {user_context.demographics.relationship_stage}
-- 선호: {', '.join(user_context.preferences)}
-- 예산: {user_context.requirements.budget_level}
-- 시간대: {user_context.requirements.time_preference}
-
-다음 형식으로 정확히 응답해주세요:
-특성:|키워드1,키워드2,키워드3
-분위기:|한단어설명
-이유:|사용자에게적합한상세이유문장
-
-예시:
-특성:|주거지역,조용한분위기,가족친화적
-분위기:|평온한
-이유:|조용한 주거지역으로 {user_context.demographics.age}세 {user_context.demographics.relationship_stage}가 편안하게 대화하기 좋은 환경입니다. 지하철 접근성도 우수합니다."""
-
             response = await asyncio.to_thread(
                 client.chat.completions.create,
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.7,
-                max_tokens=300
-            )
-            
-            llm_text = response.choices[0].message.content.strip()
-            print(f"새 지역 '{area_name}' 특성 분석: {llm_text}")
-            
-            # 응답 파싱
-            result = {"signature_traits": ["일반지역"], "vibe": "특별한", "reason": f"{area_name} 지역 추천"}
-            
-            lines = llm_text.split('\n')
-            for line in lines:
-                if '특성:|' in line:
-                    traits = line.split('특성:|')[1].strip().split(',')
-                    result["signature_traits"] = [t.strip() for t in traits if t.strip()]
-                elif '분위기:|' in line:
-                    result["vibe"] = line.split('분위기:|')[1].strip()
-                elif '이유:|' in line:
-                    result["reason"] = line.split('이유:|')[1].strip()
-            
-            return result
-            
-        except Exception as e:
-            print(f"지역 특성 분석 실패: {e}")
-            return {
-                "signature_traits": ["일반지역"],
-                "vibe": "특별한",
-                "reason": f"{area_name} 지역으로 데이트하기 좋은 곳입니다."
-            }
-
-    async def analyze_with_llm(self, request: PlaceAgentRequest) -> Dict[str, List[str]]:
-        """LLM을 활용한 지역 분석 (하이브리드 지원)"""
-        try:
-            prompt = self.create_analysis_prompt(request)
-            
-            response = await asyncio.to_thread(
-                client.chat.completions.create,
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.7,
-                max_tokens=500
+                max_tokens=600
             )
             
             llm_text = response.choices[0].message.content
@@ -331,366 +324,386 @@ class PlaceAgent:
             print(f"LLM 분석 실패: {e}")
             return {"areas": [], "reasons": []}
 
-    def generate_simple_reason(self, area_name: str, user_context: UserContext) -> str:
-        """간단한 이유 생성 (fallback용)"""
-        demo = user_context.demographics
-        req = user_context.requirements
+    def generate_area_coordinates(self, area_name: str, count: int, base_lat: float, base_lng: float) -> List[Dict]:
+        """지역 내 여러 좌표 생성"""
+        coordinates = []
         
-        # 지역 정보 확인
-        area_info = AREA_CENTERS.get(area_name, {})
-        vibe = area_info.get('vibe', '특별한')
+        # 첫 번째는 기본 좌표
+        norm_lat, norm_lng = normalize_coordinates(base_lat, base_lng)
+        coordinates.append({
+            "lat": norm_lat,
+            "lng": norm_lng,
+            "sub_location": area_name,
+            "detail": "메인 지역"
+        })
         
-        reason = f"이곳은 {vibe} 분위기로 {demo.age}세 {demo.relationship_stage}에게 적합하여 추천합니다. "
+        if count <= 1:
+            return coordinates
         
-        # transportation null 처리
-        transport = req.transportation
-        if transport == "지하철":
-            reason += "지하철 접근성이 좋아 이동이 편리합니다."
-        elif transport:
-            reason += f"{transport} 이용 시 접근성이 우수합니다."
-        else:
-            reason += "접근성이 우수합니다."
+        # 나머지는 반경 500m 내에서 생성
+        import random
+        random.seed(hash(area_name))  # 일관성 유지
+        
+        attempt = 0
+        max_attempts = 50
+        
+        while len(coordinates) < count and attempt < max_attempts:
+            attempt += 1
             
-        return reason
+            # 반경 500m 내에서 랜덤 좌표 생성
+            angle = random.uniform(0, 2 * math.pi)
+            distance = random.uniform(100, 500)  # 100m~500m
+            
+            # 좌표 변환
+            lat_offset = (distance * math.cos(angle)) / 111000
+            lng_offset = (distance * math.sin(angle)) / (111000 * math.cos(math.radians(base_lat)))
+            
+            new_lat = base_lat + lat_offset
+            new_lng = base_lng + lng_offset
+            
+            norm_new_lat, norm_new_lng = normalize_coordinates(new_lat, new_lng)
+            
+            # 중복 체크
+            is_duplicate = False
+            for existing in coordinates:
+                distance_check = calculate_distance(
+                    norm_new_lat, norm_new_lng, 
+                    existing["lat"], existing["lng"]
+                )
+                if distance_check < MIN_DISTANCE_METERS:
+                    is_duplicate = True
+                    break
+            
+            if not is_duplicate:
+                coordinates.append({
+                    "lat": norm_new_lat,
+                    "lng": norm_new_lng,
+                    "sub_location": f"{area_name} {len(coordinates)}",
+                    "detail": f"{area_name} 주변"
+                })
+        
+        return coordinates
 
-    async def get_multiple_coordinates_for_area(self, area_name: str, count: int, user_context: UserContext) -> List[Dict]:
+    async def get_multiple_coordinates_for_area(self, area_name: str, count: int) -> List[Dict]:
         """같은 지역 내에서 여러 세부 위치 좌표 조회"""
         results = []
         
-        # 1. 기본 지역 정보 먼저 조회
-        base_info = await self.get_coordinates_from_kakao(area_name, user_context)
-        if base_info:
-            results.append({
-                **base_info,
-                "sub_location": area_name,  # "중심가" 제거
-                "detail": "메인 지역"
-            })
+        # 기본 지역 정보 조회
+        base_info = await self.get_coordinates_from_kakao(area_name)
+        if not base_info:
+            print(f"지역 정보를 찾을 수 없음: {area_name}")
+            return results
         
-        if not self.kakao_api_key or len(results) >= count:
-            return results[:count]
+        base_lat, base_lng = base_info["lat"], base_info["lng"]
         
-        # 2. 해당 지역 대표 장소들 검색
-        try:
-            headers = {"Authorization": f"KakaoAK {self.kakao_api_key}"}
-            async with httpx.AsyncClient() as client_session:
-                response = await client_session.get(
-                    "https://dapi.kakao.com/v2/local/search/keyword.json",
-                    params={
-                        "query": f"서울 {area_name}",  # 핵심 변경!
-                        "size": 10  # 충분한 결과 확보
-                    },
-                    headers=headers
-                )
-                
-                if response.status_code == 200:
-                    data = response.json()
-
-                    print(f"검색어: 서울 {area_name}")
-                    print(f"검색 결과: {[place.get('place_name') for place in data.get('documents', [])]}")
+        # Kakao API로 해당 지역 장소들 검색
+        if self.kakao_api_key:
+            try:
+                headers = {"Authorization": f"KakaoAK {self.kakao_api_key}"}
+                async with httpx.AsyncClient() as client_session:
+                    search_queries = [
+                        f"서울 {area_name} 맛집",
+                        f"서울 {area_name}",
+                        f"서울 {area_name} 카페"
+                    ]
                     
-                    for place in data.get("documents", []):
-                        if len(results) >= count:
+                    all_places = []
+                    for query in search_queries:
+                        if len(all_places) >= count * 2:
                             break
                             
-                        lat, lng = float(place["y"]), float(place["x"])
+                        response = await client_session.get(
+                            "https://dapi.kakao.com/v2/local/search/keyword.json",
+                            params={
+                                "query": query,
+                                "size": 15
+                            },
+                            headers=headers
+                        )
                         
-                        # 기존 좌표와 중복 체크
+                        if response.status_code == 200:
+                            data = response.json()
+                            places = data.get("documents", [])
+                            all_places.extend(places)
+                    
+                    # 중복 제거 및 거리 기반 필터링
+                    unique_places = []
+                    for place in all_places:
+                        place_lat, place_lng = normalize_coordinates(float(place["y"]), float(place["x"]))
+                        
+                        # 기본 지역에서 1km 이내인지 확인
+                        distance_from_base = calculate_distance(
+                            place_lat, place_lng, base_lat, base_lng
+                        )
+                        
+                        if distance_from_base > 1000:  # 1km 초과시 제외
+                            continue
+                        
+                        # 기존 장소와 중복 체크
                         is_duplicate = False
-                        for existing in results:
-                            distance = math.sqrt(
-                                (lat - existing["lat"]) ** 2 +
-                                (lng - existing["lng"]) ** 2
-                            ) * 111000
-                            if distance < 100:
+                        for existing in unique_places:
+                            if calculate_distance(
+                                place_lat, place_lng,
+                                existing["lat"], existing["lng"]
+                            ) < MIN_DISTANCE_METERS:
                                 is_duplicate = True
                                 break
                         
                         if not is_duplicate:
-                            # 지역 정보 설정
-                            if area_name not in AREA_CENTERS and user_context:
-                                area_analysis = await self.analyze_new_area_characteristics(area_name, user_context)
-                                llm_reason = area_analysis["reason"]
-                                signature_traits = area_analysis["signature_traits"]
-                                vibe = area_analysis["vibe"]
-                            else:
-                                area_info = AREA_CENTERS.get(area_name, {})
-                                llm_reason = None
-                                signature_traits = area_info.get("signature_traits", ["일반지역"])
-                                vibe = area_info.get("vibe", "특별한")
-                            
-                            results.append({
-                                "lat": lat,
-                                "lng": lng,
-                                "signature_traits": signature_traits,
-                                "vibe": vibe,
-                                "keywords": signature_traits,
-                                "llm_reason": llm_reason,
-                                "sub_location": place.get("place_name", f"{area_name} 주변"),
-                                "detail": place.get("category_name", "장소")
+                            unique_places.append({
+                                "lat": place_lat,
+                                "lng": place_lng,
+                                "place_name": place.get("place_name", f"{area_name} 장소"),
+                                "category": place.get("category_name", "일반"),
+                                "address": place.get("address_name", "")
                             })
                             
-            print(f"검색어: 서울 {area_name}")
-            print(f"검색 결과: {[place.get('place_name') for place in data.get('documents', [])]}")
-        except Exception as e:
-            print(f"대표 장소 검색 실패: {e}")
+                            if len(unique_places) >= count:
+                                break
+                    
+                    # 결과 구성
+                    for place_info in unique_places[:count]:
+                        results.append({
+                            "lat": place_info["lat"],
+                            "lng": place_info["lng"],
+                            "sub_location": place_info["place_name"],
+                            "detail": place_info["category"],
+                            "address": place_info.get("address", "")
+                        })
+                    
+            except Exception as e:
+                print(f"Kakao API 장소 검색 실패: {e}")
         
-        # 부족한 경우 offset으로 채우기
-        while len(results) < count and base_info:
-            offset_count = len(results)
-            offset_lat = base_info["lat"] + (offset_count * 0.0005)
-            offset_lng = base_info["lng"] + (offset_count * 0.0005)
+        # 부족한 경우 지역 내 좌표 생성으로 보충
+        if len(results) < count:
+            remaining = count - len(results)
+            generated_coords = self.generate_area_coordinates(area_name, remaining, base_lat, base_lng)
             
-            results.append({
-                **base_info,
-                "lat": offset_lat,
-                "lng": offset_lng,
-                "sub_location": f"{area_name} {offset_count}",  # 간단하게
-                "detail": f"{area_name} 주변"
-            })
+            for coord_info in generated_coords:
+                # 기존 결과와 중복 체크
+                is_duplicate = False
+                for existing in results:
+                    if calculate_distance(
+                        coord_info["lat"], coord_info["lng"],
+                        existing["lat"], existing["lng"]
+                    ) < MIN_DISTANCE_METERS:
+                        is_duplicate = True
+                        break
+                
+                if not is_duplicate:
+                    results.append(coord_info)
         
         return results[:count]
 
-
-    async def get_coordinates_from_kakao(self, area_name: str, user_context: Optional[UserContext] = None) -> Optional[Dict]:
-        """하이브리드 지역 정보 조회 - 기존 데이터 우선, 새 지역은 LLM 분석"""
-        # 1단계: 기존 하드코딩 데이터 우선 사용
-        if area_name in AREA_CENTERS:
-            return AREA_CENTERS[area_name]
-        # 2단계: Kakao API로 좌표 확인
-        if not self.kakao_api_key:
-            print(f"알 수 없는 지역: {area_name}, Kakao API 키도 없음")
-            return None
-        try:
-            headers = {"Authorization": f"KakaoAK {self.kakao_api_key}"}
-            async with httpx.AsyncClient() as client_session:
-                response = await client_session.get(
-                    "https://dapi.kakao.com/v2/local/search/keyword.json",
-                    params={"query": area_name + " 서울"},  # 서울로 한정
-                    headers=headers
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    if data.get("documents"):
-                        place = data["documents"][0]
-                        coords = {
-                            "lat": float(place["y"]),
-                            "lng": float(place["x"])
-                        }
-                        # 3단계: 사용자 컨텍스트가 있으면 LLM으로 지역 특성 분석
-                        if user_context:
-                            print(f"새로운 지역 '{area_name}' LLM 분석 시작...")
-                            area_analysis = await self.analyze_new_area_characteristics(area_name, user_context)
-                            return {
-                                "lat": coords["lat"],
-                                "lng": coords["lng"],
-                                "signature_traits": area_analysis["signature_traits"],
-                                "vibe": area_analysis["vibe"],
-                                "keywords": area_analysis["signature_traits"],
-                                "llm_reason": area_analysis["reason"]  # LLM 생성 이유 별도 저장
-                            }
-                        # 4단계: 컨텍스트 없으면 기본값
-                        return {
-                            "lat": coords["lat"],
-                            "lng": coords["lng"],
-                            "signature_traits": ["일반지역"],
-                            "vibe": "특별한",
-                            "keywords": ["일반지역"]
-                        }
-        except Exception as e:
-            print(f"Kakao API 요청 실패: {e}")
-        return None
-
-    def select_areas_by_proximity(self, request: PlaceAgentRequest) -> List[str]:
-        """proximity_type에 따른 지역 선정 (룰 기반 fallback)"""
-        location_req = request.location_request
-        user_context = request.user_context
-        
-        proximity_type = location_req.proximity_type
-        reference_areas = location_req.reference_areas
-        place_count = location_req.place_count
-        
-        if proximity_type == "exact":
-            # 정확한 장소 - reference_areas 그대로 반환
-            return reference_areas[:place_count]
-            
-        elif proximity_type == "near":
-            # 근처 - 첫 번째 reference_area 근처 지역들
-            if not reference_areas:
-                return list(AREA_CENTERS.keys())[:place_count]
-            
-            base_area = reference_areas[0]
-            base_info = AREA_CENTERS.get(base_area)
-            if not base_info:
-                return list(AREA_CENTERS.keys())[:place_count]
-            
-            # 거리 기반 정렬
-            scored = []
-            for area_name, area_data in AREA_CENTERS.items():
-                if area_name != base_area:
-                    distance = math.sqrt(
-                        (area_data["lat"] - base_info["lat"]) ** 2 + 
-                        (area_data["lng"] - base_info["lng"]) ** 2
-                    )
-                    scored.append((area_name, distance))
-            
-            scored.sort(key=lambda x: x[1])  # 거리순 정렬
-            return [area for area, _ in scored[:place_count]]
-            
-        elif proximity_type == "between":
-            # 두 장소 사이 - 중간지점 계산
-            if len(reference_areas) < 2:
-                return list(AREA_CENTERS.keys())[:place_count]
-            
-            area1_info = AREA_CENTERS.get(reference_areas[0])
-            area2_info = AREA_CENTERS.get(reference_areas[1])
-            if not area1_info or not area2_info:
-                return list(AREA_CENTERS.keys())[:place_count]
-            
-            # 중간지점 계산
-            mid_lat = (area1_info["lat"] + area2_info["lat"]) / 2
-            mid_lng = (area1_info["lng"] + area2_info["lng"]) / 2
-            
-            # 중간지점에서 가까운 순으로 정렬
-            scored = []
-            for area_name, area_data in AREA_CENTERS.items():
-                if area_name not in reference_areas:
-                    distance = math.sqrt(
-                        (area_data["lat"] - mid_lat) ** 2 + 
-                        (area_data["lng"] - mid_lng) ** 2
-                    )
-                    scored.append((area_name, distance))
-            
-            scored.sort(key=lambda x: x[1])
-            return [area for area, _ in scored[:place_count]]
-            
-        elif proximity_type == "multi":
-            # 여러 곳 - 개인화 추천
-            candidates = list(AREA_CENTERS.keys())
-            
-            # MBTI 기반 필터링
-            mbti_preferred = []
-            for char in user_context.demographics.mbti:
-                mbti_preferred.extend(MBTI_PREFERENCES.get(char, []))
-            
-            # 관계단계 기반 필터링
-            relationship_preferred = RELATIONSHIP_PREFERENCES.get(
-                user_context.demographics.relationship_stage, []
-            )
-            
-            # 점수 계산
-            scored = []
-            for area in candidates:
-                score = 0
-                if area in mbti_preferred:
-                    score += 2
-                if area in relationship_preferred:
-                    score += 3
-                scored.append((area, score))
-            
-            scored.sort(key=lambda x: x[1], reverse=True)
-            return [area for area, _ in scored[:place_count]]
-        
-        # 기본값
-        return list(AREA_CENTERS.keys())[:place_count]
-
     async def process_request(self, request: PlaceAgentRequest) -> List[LocationResponse]:
-        """메인 요청 처리 - 하이브리드 지역 처리"""
+        """메인 요청 처리"""
         
-        # proximity_type이 "exact"인 경우 특별 처리
-        if request.location_request.proximity_type == "exact":
+        proximity_type = request.location_request.proximity_type
+        reference_areas = request.location_request.reference_areas
+        place_count = request.location_request.place_count
+        
+        # 1. Exact 모드: reference_areas 내 여러 위치 제공
+        if proximity_type == "exact":
             print("Exact 모드: reference_areas 내 여러 위치 제공")
-            
             locations = []
-            areas_to_process = request.location_request.reference_areas
             
-            for area_name in areas_to_process:
-                remaining_count = request.location_request.place_count - len(locations)
+            for area_name in reference_areas:
+                remaining_count = place_count - len(locations)
                 if remaining_count <= 0:
                     break
                 
-                # 같은 지역 내 여러 위치 조회
-                area_locations = await self.get_multiple_coordinates_for_area(
-                    area_name, remaining_count, request.user_context
-                )
+                area_locations = await self.get_multiple_coordinates_for_area(area_name, remaining_count)
                 
-                for i, area_info in enumerate(area_locations, len(locations) + 1):
-                    # exact 모드에서의 reason 생성
-                    if "llm_reason" in area_info and area_info["llm_reason"]:
-                        reason = area_info["llm_reason"]
-                    else:
-                        reason = self.generate_simple_reason(area_name, request.user_context)
-                    
-                    # 세부 위치 정보를 reason에 반영
-                    if "place_name" in area_info and area_info["place_name"] and area_info["place_name"] != f"{area_name} 중심가":
-                        if "detail" in area_info and area_info["detail"]:
-                            reason = f"이곳은 {area_info['place_name']}({area_info['detail']}) 근처로, " + reason[4:]  # "이곳은" 부분 대체
+                # area_locations를 candidate_areas 형태로 변환
+                candidate_areas = []
+                for area_info in area_locations:
+                    candidate_areas.append({
+                        "area_name": area_info.get("sub_location", area_name),
+                        "lat": area_info["lat"],
+                        "lng": area_info["lng"],
+                        "distance": 0,  # exact 모드라서 거리는 0
+                        "place_name": area_info.get("sub_location", area_name),
+                        "category": area_info.get("detail", "")
+                    })
+                
+                # 기존 LLM 프롬프트 함수 재활용
+                prompt = self.create_prompt_area_selection(request, candidate_areas, "exact")
+                llm_result = await self.analyze_with_llm(prompt)
+                
+                # LLM 결과가 있으면 사용, 없으면 fallback
+                if llm_result["areas"] and llm_result["reasons"]:
+                    for i, (area_info, reason) in enumerate(zip(area_locations, llm_result["reasons"]), len(locations) + 1):
+                        locations.append(LocationResponse(
+                            sequence=i,
+                            area_name=area_name,
+                            coordinates=Coordinates(
+                                latitude=area_info["lat"],
+                                longitude=area_info["lng"]
+                            ),
+                            reason=reason
+                        ))
+                else:
+                    # Fallback: 간단한 이유
+                    for i, area_info in enumerate(area_locations, len(locations) + 1):
+                        sub_location = area_info.get("sub_location", area_name)
+                        detail = area_info.get("detail", "")
+                        
+                        if detail and detail != "메인 지역":
+                            reason = f"이곳은 {sub_location}({detail})로 {area_name} 지역 내 요청하신 정확한 위치에 해당하여 추천합니다."
                         else:
-                            reason = f"이곳은 {area_info['place_name']} 근처로, " + reason[4:]  # "이곳은" 부분 대체
-                    
+                            reason = f"이곳은 {sub_location}로 {area_name} 지역 내 요청하신 정확한 위치에 해당하여 추천합니다."
+                        
+                        locations.append(LocationResponse(
+                            sequence=i,
+                            area_name=area_name,
+                            coordinates=Coordinates(
+                                latitude=area_info["lat"],
+                                longitude=area_info["lng"]
+                            ),
+                            reason=reason
+                        ))
+            
+            return locations
+        
+        # 2. Near 모드: 기준 지역 주변 검색
+        elif proximity_type == "near" and reference_areas:
+            print(f"Near 모드: {reference_areas[0]} 주변 지역 분석")
+            
+            # 기준 지역 좌표 획득
+            base_coord = await self.get_coordinates_from_kakao(reference_areas[0])
+            if not base_coord:
+                return []
+            
+            # 주변 지역들 검색
+            nearby_areas = await self.find_nearby_areas(base_coord["lat"], base_coord["lng"])
+            
+            if not nearby_areas:
+                return []
+            
+            # LLM으로 최적 지역 선정
+            prompt = self.create_prompt_area_selection(request, nearby_areas, "near")
+            llm_result = await self.analyze_with_llm(prompt)
+            
+            if not llm_result["areas"]:
+                return []
+            
+            # 선정된 지역들의 좌표 정보 매칭
+            locations = []
+            for i, (area_name, reason) in enumerate(zip(llm_result["areas"][:place_count], 
+                                                       llm_result["reasons"][:place_count]), 1):
+                # nearby_areas에서 해당 지역 찾기
+                matched_area = None
+                for area in nearby_areas:
+                    if area_name in area["area_name"] or area["area_name"] in area_name:
+                        matched_area = area
+                        break
+                
+                if not matched_area:
+                    # 직접 검색
+                    coord = await self.get_coordinates_from_kakao(area_name)
+                    if coord:
+                        matched_area = coord
+                
+                if matched_area:
                     locations.append(LocationResponse(
                         sequence=i,
                         area_name=area_name,
                         coordinates=Coordinates(
-                            latitude=area_info["lat"],
-                            longitude=area_info["lng"]
+                            latitude=matched_area["lat"],
+                            longitude=matched_area["lng"]
                         ),
                         reason=reason
                     ))
             
             return locations
         
-        # proximity_type이 "exact"가 아닌 경우 기존 로직 수행
-        try:
-            # LLM으로 지역 분석 시도
-            llm_result = await self.analyze_with_llm(request)
-            if llm_result["areas"] and len(llm_result["areas"]) >= request.location_request.place_count:
-                selected_areas = llm_result["areas"][:request.location_request.place_count]
-                reasons = llm_result["reasons"][:request.location_request.place_count]
-                print("LLM 기반 지역 선정 성공")
-            else:
-                raise Exception("LLM 결과 부족")
+        # 3. Between 모드: 두 지역 중간점 분석
+        elif proximity_type == "between" and len(reference_areas) >= 2:
+            print(f"Between 모드: {reference_areas[0]}과 {reference_areas[1]} 중간 지점 분석")
+            
+            # 두 지역 좌표 획득
+            coord1 = await self.get_coordinates_from_kakao(reference_areas[0])
+            coord2 = await self.get_coordinates_from_kakao(reference_areas[1])
+            
+            if not coord1 or not coord2:
+                return []
+            
+            # 중간점 계산
+            mid_lat = (coord1["lat"] + coord2["lat"]) / 2
+            mid_lng = (coord1["lng"] + coord2["lng"]) / 2
+            
+            # 중간점 주변 지역들 검색
+            nearby_areas = await self.find_nearby_areas(mid_lat, mid_lng, radius_km=2.0)
+            
+            if not nearby_areas:
+                return []
+            
+            # LLM으로 최적 중간 지역 선정
+            prompt = self.create_prompt_area_selection(request, nearby_areas, "between")
+            llm_result = await self.analyze_with_llm(prompt)
+            
+            if not llm_result["areas"]:
+                return []
+            
+            # 선정된 지역들의 좌표 정보 매칭
+            locations = []
+            for i, (area_name, reason) in enumerate(zip(llm_result["areas"][:place_count], 
+                                                       llm_result["reasons"][:place_count]), 1):
+                # nearby_areas에서 해당 지역 찾기
+                matched_area = None
+                for area in nearby_areas:
+                    if area_name in area["area_name"] or area["area_name"] in area_name:
+                        matched_area = area
+                        break
                 
-        except Exception as e:
-            print(f"LLM 분석 실패, 룰 기반 처리: {e}")
-            # 기존 룰 기반 로직으로 fallback
-            selected_areas = self.select_areas_by_proximity(request)
-            reasons = [
-                self.generate_simple_reason(area, request.user_context) 
-                for area in selected_areas
-            ]
+                if not matched_area:
+                    # 직접 검색
+                    coord = await self.get_coordinates_from_kakao(area_name)
+                    if coord:
+                        matched_area = coord
+                
+                if matched_area:
+                    locations.append(LocationResponse(
+                        sequence=i,
+                        area_name=area_name,
+                        coordinates=Coordinates(
+                            latitude=matched_area["lat"],
+                            longitude=matched_area["lng"]
+                        ),
+                        reason=reason
+                    ))
+            
+            return locations
         
-        # 좌표 변환 및 최종 응답 생성 (하이브리드 처리)
-        locations = []
-        for i, area_name in enumerate(selected_areas, 1):
-            # 사용자 컨텍스트를 포함해서 지역 정보 조회 (하이브리드)
-            area_info = await self.get_coordinates_from_kakao(area_name, request.user_context)
+        # 4. Multi 모드 또는 기타: 일반 LLM 추천
+        else:
+            print("Multi/기타 모드: 일반 LLM 추천")
             
-            if not area_info:
-                print(f"지역 정보를 찾을 수 없음: {area_name}")
-                continue
+            # 일반적인 LLM 추천
+            prompt = self.create_prompt_area_selection(request, None, "multi")
+            llm_result = await self.analyze_with_llm(prompt)
             
-            # reason 결정 우선순위
-            if "llm_reason" in area_info and area_info["llm_reason"]:
-                # 새로운 지역의 경우 LLM이 생성한 상세 이유 사용
-                reason = area_info["llm_reason"]
-            elif i-1 < len(reasons):
-                # 기존 지역이거나 LLM에서 생성된 이유 사용
-                reason = reasons[i-1]
-            else:
-                # fallback: 간단한 이유 생성
-                reason = self.generate_simple_reason(area_name, request.user_context)
+            if not llm_result["areas"]:
+                return []
             
-            locations.append(LocationResponse(
-                sequence=i,
-                area_name=area_name,
-                coordinates=Coordinates(
-                    latitude=area_info["lat"],
-                    longitude=area_info["lng"]
-                ),
-                reason=reason
-            ))
-        
-        return locations
+            # 선정된 지역들의 좌표 획득
+            locations = []
+            for i, (area_name, reason) in enumerate(zip(llm_result["areas"][:place_count], 
+                                                       llm_result["reasons"][:place_count]), 1):
+                coord = await self.get_coordinates_from_kakao(area_name)
+                
+                if coord:
+                    locations.append(LocationResponse(
+                        sequence=i,
+                        area_name=area_name,
+                        coordinates=Coordinates(
+                            latitude=coord["lat"],
+                            longitude=coord["lng"]
+                        ),
+                        reason=reason
+                    ))
+            
+            return locations
 
 # Place Agent 인스턴스
 place_agent = PlaceAgent()
@@ -714,6 +727,7 @@ async def analyze_location(request: PlaceAgentRequest):
     except HTTPException:
         raise
     except Exception as e:
+        print(f"처리 중 오류 발생: {e}")
         return PlaceAgentResponse(
             request_id=request.request_id,
             success=False,
@@ -724,12 +738,78 @@ async def analyze_location(request: PlaceAgentRequest):
 @app.get("/health")
 async def health_check():
     """헬스 체크 엔드포인트"""
-    return {"status": "healthy", "service": "Place Agent v2.0 (Hybrid)"}
+    return {
+        "status": "healthy", 
+        "service": "Place Agent v3.0.0 (No Hardcoding - Full LLM/API)",
+        "kakao_api": "available" if place_agent.kakao_api_key else "not configured"
+    }
 
-@app.get("/areas")
-async def get_available_areas():
-    """사용 가능한 지역 목록 반환"""
-    return {"areas": list(AREA_CENTERS.keys())}
+@app.get("/test-coordinates/{area_name}")
+async def test_coordinates(area_name: str, count: int = 3):
+    """특정 지역의 좌표 테스트용 엔드포인트"""
+    try:
+        coords = await place_agent.get_multiple_coordinates_for_area(area_name, count)
+        return {
+            "area": area_name,
+            "coordinates": coords,
+            "count": len(coords)
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/test-nearby/{area_name}")
+async def test_nearby_areas(area_name: str, radius: float = 3.0):
+    """특정 지역 주변 검색 테스트용 엔드포인트"""
+    try:
+        base_coord = await place_agent.get_coordinates_from_kakao(area_name)
+        if not base_coord:
+            return {"error": f"지역을 찾을 수 없음: {area_name}"}
+        
+        nearby_areas = await place_agent.find_nearby_areas(
+            base_coord["lat"], base_coord["lng"], radius
+        )
+        
+        return {
+            "base_area": area_name,
+            "base_coordinates": base_coord,
+            "nearby_areas": nearby_areas,
+            "count": len(nearby_areas)
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.post("/test-request")
+async def test_full_request():
+    """전체 요청 처리 테스트용 엔드포인트"""
+    # 테스트용 더미 요청
+    dummy_request = PlaceAgentRequest(
+        request_id="test-001",
+        timestamp="2025-01-01T12:00:00",
+        location_request=LocationRequest(
+            proximity_type="near",
+            reference_areas=["홍대"],
+            place_count=3
+        ),
+        user_context=UserContext(
+            demographics=Demographics(age=25, mbti="ENFP", relationship_stage="연인"),
+            preferences=["조용한 분위기", "트렌디한"],
+            requirements=Requirements(
+                budget_level="medium",
+                time_preference="오후",
+                transportation="지하철"
+            )
+        )
+    )
+    
+    try:
+        locations = await place_agent.process_request(dummy_request)
+        return {
+            "request": dummy_request.dict(),
+            "response": locations,
+            "count": len(locations)
+        }
+    except Exception as e:
+        return {"error": str(e)}
 
 if __name__ == "__main__":
     import uvicorn
