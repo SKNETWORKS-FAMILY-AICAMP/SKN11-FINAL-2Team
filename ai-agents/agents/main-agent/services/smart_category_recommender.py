@@ -140,7 +140,7 @@ class SmartCategoryRecommender:
 다음을 포함해서 정중하고 친근한 톤으로 재확인 메시지를 작성해주세요:
 1. 왜 {requested}개가 어려운지 간단히 설명 (각 장소에서 충분히 즐기기 위해)
 2. {max_allowed}개를 추천하는 이유
-3. 사용자의 선택권 제시: "{max_allowed}개로 할래요? 아니면 시간을 늘리시결래요?"
+3. 사용자의 선택권 제시: "{max_allowed}개로 할래요? 아니면 시간을 늘리시겠어요?"
 
 예시 톤: "아, {duration} 데이트에 {requested}개 장소는 조금 빡빡할 수 있어요! 각 장소에서 충분히 즐기시려면..."
 
@@ -152,7 +152,7 @@ class SmartCategoryRecommender:
             
         except Exception as e:
             print(f"[ERROR] GPT 재확인 메시지 생성 실패: {e}")
-            return f"⚠️ {duration} 데이트에 {requested}개 장소는 조금 빡빡할 수 있어요! 최대 {max_allowed}개를 추천드려요. {max_allowed}개로 하시겠어요? 아니면 시간을 늘리시결래요?"
+            return f"⚠️ {duration} 데이트에 {requested}개 장소는 조금 빡빡할 수 있어요! 최대 {max_allowed}개를 추천드려요. {max_allowed}개로 하시겠어요? 아니면 시간을 늘리시겠어요?"
 
     async def handle_category_modification(self, user_request: str,
                                          current_recommendations: List[CategoryRecommendation]) -> Dict:

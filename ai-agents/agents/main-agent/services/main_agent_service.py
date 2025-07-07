@@ -1086,48 +1086,97 @@ class MainAgentService:
         print(f"[EMERGENCY_FALLBACK] 시간대({time_slot}) 기반 기본 추천 생성: {len(recommendations)}개")
         return recommendations
     
-    async def _process_all_profile_fields_with_gpt(self, profile: 'UserProfile', user_input: str, session_info: dict, session_id: str) -> bool:
+    async def _process_all_profile_fields_with_gpt(self, profile: 'UserProfile', user_input: str, session_info: dict, session_id: str, target_field: str = None) -> bool:
         """
         GPT가 사용자 입력을 분석해서 모든 프로필 필드를 자동으로 업데이트
         상용 급 완전 자동화 처리
         """
-        print(f"[GPT_AUTO_UPDATE] 사용자 입력 분석 시작: '{user_input}'")
-        
-        # 모든 필드를 GPT가 체크할 대상 필드들
-        target_fields = [
-            "duration", "place_count", "address", "time_slot", "atmosphere", 
-            "budget", "transportation", "car_owned", "relationship_stage",
-            "general_preferences", "description"
-        ]
+        print(f"[GPT_AUTO_UPDATE] 사용자 입력 분석 시작: '{user_input}' (타겟 필드: {target_field})")
         
         updated_fields = []
         
-        # 각 필드를 GPT가 처리
-        for field_name in target_fields:
+        # 1단계: 타겟 필드가 지정되어 있으면 최우선 처리
+        if target_field:
             try:
-                # 현재 값 가져오기
-                current_value = getattr(profile, field_name, None)
+                current_value = getattr(profile, target_field, None)
+                result = await self.field_processor.process_field(target_field, user_input)
                 
-                # GPT로 필드 처리
-                result = await self.field_processor.process_field(field_name, user_input)
-                
-                if result["success"] and result["confidence"] >= 0.7:
+                if result["success"] and result["confidence"] >= 0.3:  # 타겟 필드는 더 낮은 신뢰도도 허용
                     new_value = result["value"]
                     
-                    # 값이 실제로 변경된 경우만 업데이트
                     if current_value != new_value and new_value is not None:
-                        setattr(profile, field_name, new_value)
+                        setattr(profile, target_field, new_value)
                         updated_fields.append({
-                            "field": field_name,
+                            "field": target_field,
                             "old": current_value,
                             "new": new_value,
                             "confidence": result["confidence"]
                         })
-                        print(f"[GPT_AUTO_UPDATE] {field_name}: '{current_value}' → '{new_value}' (신뢰도: {result['confidence']})")
+                        print(f"[GPT_TARGET_UPDATE] {target_field}: '{current_value}' → '{new_value}' (신뢰도: {result['confidence']})")
+                        
+                        # 타겟 필드 업데이트 성공하면 바로 리턴
+                        session_info['profile'] = profile
+                        SESSION_INFO[session_id] = session_info
+                        print(f"[GPT_TARGET_UPDATE] 타겟 필드 업데이트 완료")
+                        return True
                     
             except Exception as e:
-                print(f"[ERROR] GPT 필드 처리 실패 - {field_name}: {e}")
-                continue
+                print(f"[ERROR] GPT 타겟 필드 처리 실패 - {target_field}: {e}")
+        
+        # 2단계: 핵심 수정 필드를 우선 처리 (더 낮은 신뢰도 허용)
+        priority_fields = ["duration", "place_count"]
+        standard_fields = [
+            "address", "time_slot", "atmosphere", "budget", "transportation", 
+            "car_owned", "relationship_stage", "general_preferences", "description"
+        ]
+        
+        # 타겟 필드가 지정된 경우는 이미 처리했으므로 여기서는 일반 처리만
+        if not target_field:
+            # 3단계: 핵심 수정 필드 처리 (신뢰도 0.3 이상 - 카테고리 단계에서는 더 적극적)
+            for field_name in priority_fields:
+                try:
+                    current_value = getattr(profile, field_name, None)
+                    result = await self.field_processor.process_field(field_name, user_input)
+                    
+                    if result["success"] and result["confidence"] >= 0.3:
+                        new_value = result["value"]
+                        
+                        if current_value != new_value and new_value is not None:
+                            setattr(profile, field_name, new_value)
+                            updated_fields.append({
+                                "field": field_name,
+                                "old": current_value,
+                                "new": new_value,
+                                "confidence": result["confidence"]
+                            })
+                            print(f"[GPT_PRIORITY_UPDATE] {field_name}: '{current_value}' → '{new_value}' (신뢰도: {result['confidence']})")
+                        
+                except Exception as e:
+                    print(f"[ERROR] GPT 우선 필드 처리 실패 - {field_name}: {e}")
+                    continue
+            
+            # 4단계: 일반 필드 처리 (신뢰도 0.7 이상)
+            for field_name in standard_fields:
+                try:
+                    current_value = getattr(profile, field_name, None)
+                    result = await self.field_processor.process_field(field_name, user_input)
+                    
+                    if result["success"] and result["confidence"] >= 0.7:
+                        new_value = result["value"]
+                        
+                        if current_value != new_value and new_value is not None:
+                            setattr(profile, field_name, new_value)
+                            updated_fields.append({
+                                "field": field_name,
+                                "old": current_value,
+                                "new": new_value,
+                                "confidence": result["confidence"]
+                            })
+                            print(f"[GPT_AUTO_UPDATE] {field_name}: '{current_value}' → '{new_value}' (신뢰도: {result['confidence']})")
+                        
+                except Exception as e:
+                    print(f"[ERROR] GPT 필드 처리 실패 - {field_name}: {e}")
+                    continue
         
         # 프로필 업데이트 저장
         if updated_fields:
@@ -1309,6 +1358,39 @@ class MainAgentService:
                     last_asked = session_info.get("_last_asked_field", None)
                     preference_confirmation_field = session_info.get("_preference_confirmation_field", None)
                     
+                    # 사용자 입력이 있으면 모든 누락 필드에 대해 GPT 처리 시도
+                    if request.user_message.strip():
+                        user_input = request.user_message.strip()
+                        
+                        # 타겟 필드 자동 감지 (last_asked 우선, 없으면 입력에서 감지)
+                        target_field = last_asked or self._detect_target_field(user_input)
+                        
+                        # 먼저 모든 필드에 대해 GPT 업데이트 시도 (타겟 필드 우선)
+                        updated = await self._process_all_profile_fields_with_gpt(profile, user_input, session_info, session_id, target_field)
+                        
+                        if updated:
+                            # 업데이트 성공하면 누락 필드 다시 체크
+                            missing_fields = [k for k in REQUIRED_KEYS if not getattr(profile, k)]
+                            if not missing_fields:
+                                # 모든 필수 정보 수집 완료
+                                session_info["_last_asked_field"] = None
+                                SESSION_INFO[session_id] = session_info
+                            else:
+                                # 아직 누락 필드가 있으면 다음 필드 질문
+                                next_field = missing_fields[0]
+                                session_info["_last_asked_field"] = next_field
+                                SESSION_INFO[session_id] = session_info
+                                question = FIELD_QUESTION_DICT[next_field]
+                                return MainAgentResponse(
+                                    success=True,
+                                    session_id=session_id,
+                                    profile=profile,
+                                    location_request=LocationRequest(reference_areas=[]),
+                                    message=f"✅ 업데이트 완료! {question}",
+                                    needs_recommendation=False,
+                                    suggestions=missing_fields
+                                )
+                    
                     if last_asked:
                         user_input = request.user_message.strip()
                         
@@ -1487,10 +1569,62 @@ class MainAgentService:
                             conversation_context=str(memory.buffer)
                         )
                     except ValueError as ve:
-                        # 제약 위반 예외 처리 - 사용자에게 메시지 전달
+                        # 제약 위반 예외 처리 - 사용자 입력 먼저 확인
                         if str(ve).startswith("CONSTRAINT_VIOLATION:"):
                             constraint_message = str(ve).replace("CONSTRAINT_VIOLATION:", "")
                             print(f"[ERROR] 동적 카테고리 추천 실패: {ve}")
+                            
+                            # 사용자 입력이 있다면 먼저 처리 시도
+                            if hasattr(request, 'user_message') and request.user_message.strip():
+                                user_input = request.user_message.strip()
+                                print(f"[CONSTRAINT_FIX] 제약 위반이지만 사용자 입력 처리 시도: '{user_input}'")
+                                
+                                # 타겟 필드 감지
+                                detected_target = self._detect_target_field(user_input)
+                                
+                                if detected_target:
+                                    # GPT로 필드 업데이트 시도
+                                    updated = await self._process_all_profile_fields_with_gpt(profile, user_input, session_info, session_id, detected_target)
+                                    
+                                    if updated:
+                                        print(f"[CONSTRAINT_FIX] 필드 업데이트 성공, 카테고리 재생성 시도")
+                                        # 업데이트 후 다시 카테고리 생성 시도
+                                        try:
+                                            import re
+                                            place_count = 3
+                                            if profile.place_count:
+                                                numbers = re.findall(r'\d+', str(profile.place_count))
+                                                if numbers:
+                                                    place_count = int(numbers[0])
+                                            
+                                            smart_recommendations = await self.generate_category_recommendations(
+                                                profile_data=profile.model_dump(),
+                                                place_count=place_count,
+                                                conversation_context=str(memory.buffer)
+                                            )
+                                            
+                                            # 성공하면 카테고리 표시
+                                            session_info["category_recommendations"] = smart_recommendations
+                                            session_info["_category_asked"] = True
+                                            SESSION_INFO[session_id] = session_info
+                                            
+                                            message = self.format_smart_category_message(smart_recommendations, profile.duration, place_count)
+                                            return MainAgentResponse(
+                                                success=True,
+                                                session_id=session_id,
+                                                profile=profile,
+                                                location_request=location_request,
+                                                message=f"✅ 업데이트 완료!\n\n{message}",
+                                                needs_recommendation=False,
+                                                suggestions=["맞아요", "2번째를 쇼핑으로 바꿔줘", "1번을 카페로 해주세요"]
+                                            )
+                                            
+                                        except ValueError as ve2:
+                                            print(f"[CONSTRAINT_FIX] 재시도도 실패: {ve2}")
+                                            # 재시도도 실패하면 원래 메시지 반환
+                                            pass
+                            
+                            # 사용자 입력 처리 실패하거나 없으면 원래 제약 메시지 반환
                             return MainAgentResponse(
                                 success=True,
                                 session_id=session_id,
@@ -1528,8 +1662,11 @@ class MainAgentService:
                         session_info["_category_selected"] = True
                         SESSION_INFO[session_id] = session_info
                     else:
-                        # 먼저 GPT가 전체 프로필 필드 업데이트 처리
-                        updated = await self._process_all_profile_fields_with_gpt(profile, user_input, session_info, session_id)
+                        # 사용자 입력에서 타겟 필드 자동 감지
+                        detected_target = self._detect_target_field(user_input)
+                        
+                        # 먼저 GPT가 전체 프로필 필드 업데이트 처리 (타겟 필드 우선)
+                        updated = await self._process_all_profile_fields_with_gpt(profile, user_input, session_info, session_id, detected_target)
                         
                         # 필드가 업데이트됐다면 제약 검증 다시 확인하고 카테고리 재생성
                         if updated:
@@ -2318,13 +2455,45 @@ class MainAgentService:
                 print(f"[DEBUG] 필드 확인: {key} = {value}, hasattr={hasattr(profile, key)}")
                 if value is not None and value != "" and value != []:
                     if hasattr(profile, key):
-                        setattr(profile, key, value)
-                        print(f"[DEBUG] 기존 프로필 데이터 적용: {key} = {value}")
+                        # 기존 프로필에 이미 값이 있는 경우 덮어쓰지 않음 (사용자 수정 보존)
+                        current_value = getattr(profile, key, None)
+                        if current_value is None or current_value == "" or current_value == []:
+                            setattr(profile, key, value)
+                            print(f"[DEBUG] 기존 프로필 데이터 적용: {key} = {value}")
+                        else:
+                            print(f"[DEBUG] 기존 값 보존: {key} = {current_value} (백엔드 값 {value} 무시)")
                     else:
                         print(f"[DEBUG] 프로필에 없는 필드: {key}")
                         
         except Exception as e:
             print(f"[ERROR] 기존 프로필 데이터 적용 중 오류: {e}")
+    
+    def _detect_target_field(self, user_input: str) -> str:
+        """사용자 입력에서 타겟 필드 자동 감지"""
+        user_input_lower = user_input.lower().strip()
+        
+        # 장소 개수 관련
+        if any(keyword in user_input_lower for keyword in ["개로", "개만", "개해", "곳으로", "곳만", "장소"]):
+            print(f"[DETECT_TARGET] '{user_input}' → place_count")
+            return "place_count"
+        
+        # 시간 관련  
+        if any(keyword in user_input_lower for keyword in ["시간으로", "늘려", "줄여", "반나절", "하루", "5시간", "6시간", "4시간"]):
+            print(f"[DETECT_TARGET] '{user_input}' → duration")
+            return "duration"
+            
+        # 예산 관련
+        if any(keyword in user_input_lower for keyword in ["예산", "만원", "원으로", "돈"]):
+            print(f"[DETECT_TARGET] '{user_input}' → budget")
+            return "budget"
+            
+        # 지역 관련
+        if any(keyword in user_input_lower for keyword in ["지역", "동네", "역으로", "구로"]):
+            print(f"[DETECT_TARGET] '{user_input}' → address")
+            return "address"
+        
+        print(f"[DETECT_TARGET] '{user_input}' → None (감지 실패)")
+        return None
     
     def _should_ask_preference_confirmation(self, profile: UserProfile, field_name: str) -> bool:
         """선호도 관련 필드에 대해 재확인이 필요한지 판단"""
