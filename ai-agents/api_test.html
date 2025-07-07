@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>데이트 코스 추천 API 테스트</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #FF6B6B, #FF8E53);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 16px;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        .section-header {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            border-bottom: 1px solid #e0e0e0;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .section-content {
+            padding: 20px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #555;
+        }
+        
+        input, textarea, select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+        
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .response {
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .status {
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-weight: 500;
+        }
+        
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .chat-history {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            background: #fafafa;
+        }
+        
+        .chat-message {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        
+        .chat-message.user {
+            background: #e3f2fd;
+            margin-left: 20px;
+        }
+        
+        .chat-message.bot {
+            background: #f3e5f5;
+            margin-right: 20px;
+        }
+        
+        .chat-message .sender {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌐 데이트 코스 추천 API 테스트</h1>
+            <p>Main Agent API 연동 테스트 도구</p>
+        </div>
+        
+        <div class="content">
+            <!-- 서버 상태 -->
+            <div class="section">
+                <div class="section-header">🔍 서버 상태</div>
+                <div class="section-content">
+                    <div id="serverStatus" class="status disconnected">연결 상태를 확인하는 중...</div>
+                    <button onclick="checkHealth()">상태 확인</button>
+                    <div id="healthResponse" class="response hidden"></div>
+                </div>
+            </div>
+            
+            <!-- 세션 관리 -->
+            <div class="section">
+                <div class="section-header">🔑 세션 관리</div>
+                <div class="section-content">
+                    <div class="form-group">
+                        <label>세션 ID:</label>
+                        <input type="text" id="sessionId" readonly>
+                    </div>
+                    <button onclick="createNewSession()">새 세션 생성</button>
+                    <button onclick="restoreSession()">세션 복원</button>
+                    <button onclick="clearSession()">세션 삭제</button>
+                    <div id="sessionResponse" class="response hidden"></div>
+                </div>
+            </div>
+            
+            <!-- 채팅 테스트 -->
+            <div class="section">
+                <div class="section-header">💬 채팅 테스트</div>
+                <div class="section-content">
+                    <div class="form-group">
+                        <label>메시지:</label>
+                        <textarea id="chatMessage" rows="3" placeholder="예: 29살 INTP 연인과 이촌동에서 로맨틱한 밤 데이트 3곳 추천해줘"></textarea>
+                    </div>
+                    <button onclick="sendMessage()">메시지 전송</button>
+                    <button onclick="sendQuickMessage('안녕하세요! 데이트 코스 추천을 받고 싶어요.')">빠른 시작</button>
+                    <button onclick="sendQuickMessage('29살 INTP 연인과 이촌동에서 로맨틱한 밤 데이트 3곳 추천해줘')">샘플 요청</button>
+                    
+                    <div id="chatHistory" class="chat-history"></div>
+                    <div id="chatResponse" class="response hidden"></div>
+                </div>
+            </div>
+            
+            <!-- 추천 테스트 -->
+            <div class="section">
+                <div class="section-header">🎯 추천 테스트</div>
+                <div class="section-content">
+                    <p style="margin-bottom: 15px; color: #666;">프로필이 완성된 후 전체 추천 플로우를 실행합니다.</p>
+                    <button onclick="startRecommendation()" id="recommendBtn">추천 시작</button>
+                    <div id="recommendationResponse" class="response hidden"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // API 클라이언트 클래스
+        class DateCourseAPI {
+            constructor(baseURL = 'http://localhost:8000') {
+                this.baseURL = baseURL;
+                this.sessionId = null;
+            }
+
+            createSession() {
+                this.sessionId = "chat_" + Math.random().toString(36).substr(2, 8);
+                return this.sessionId;
+            }
+
+            async sendMessage(message) {
+                const response = await fetch(`${this.baseURL}/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        session_id: this.sessionId,
+                        user_message: message,
+                        timestamp: new Date().toISOString()
+                    })
+                });
+                return await response.json();
+            }
+
+            async startRecommendation() {
+                const response = await fetch(`${this.baseURL}/recommend`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        session_id: this.sessionId
+                    })
+                });
+                return await response.json();
+            }
+
+            async restoreSession(sessionId) {
+                const response = await fetch(`${this.baseURL}/session/${sessionId}`);
+                return await response.json();
+            }
+
+            async clearSession() {
+                const response = await fetch(`${this.baseURL}/session/${this.sessionId}`, {
+                    method: 'DELETE'
+                });
+                return await response.json();
+            }
+
+            async checkHealth() {
+                const response = await fetch(`${this.baseURL}/health`);
+                return await response.json();
+            }
+        }
+
+        // 전역 변수
+        const api = new DateCourseAPI();
+        let chatHistory = [];
+
+        // 초기화
+        window.onload = function() {
+            createNewSession();
+            checkHealth();
+        };
+
+        // 새 세션 생성
+        function createNewSession() {
+            const sessionId = api.createSession();
+            document.getElementById('sessionId').value = sessionId;
+            chatHistory = [];
+            updateChatHistory();
+            showResponse('sessionResponse', { message: `새 세션이 생성되었습니다: ${sessionId}` });
+        }
+
+        // 서버 상태 확인
+        async function checkHealth() {
+            try {
+                const result = await api.checkHealth();
+                const statusEl = document.getElementById('serverStatus');
+                
+                if (result.status === 'healthy') {
+                    statusEl.className = 'status connected';
+                    statusEl.textContent = `✅ 서버 연결됨 (포트: ${result.port})`;
+                } else {
+                    statusEl.className = 'status disconnected';
+                    statusEl.textContent = '❌ 서버 응답 이상';
+                }
+                
+                showResponse('healthResponse', result);
+            } catch (error) {
+                const statusEl = document.getElementById('serverStatus');
+                statusEl.className = 'status disconnected';
+                statusEl.textContent = '❌ 서버 연결 실패';
+                showResponse('healthResponse', { error: error.message });
+            }
+        }
+
+        // 메시지 전송
+        async function sendMessage() {
+            const message = document.getElementById('chatMessage').value.trim();
+            if (!message) {
+                alert('메시지를 입력해주세요.');
+                return;
+            }
+
+            if (!api.sessionId) {
+                createNewSession();
+            }
+
+            try {
+                // 사용자 메시지 추가
+                chatHistory.push({
+                    type: 'user',
+                    content: message,
+                    timestamp: new Date().toISOString()
+                });
+                updateChatHistory();
+
+                // 로딩 표시
+                showLoading('chatResponse');
+
+                const result = await api.sendMessage(message);
+
+                // 봇 응답 추가
+                chatHistory.push({
+                    type: 'bot',
+                    content: result,
+                    timestamp: new Date().toISOString()
+                });
+                updateChatHistory();
+
+                showResponse('chatResponse', result);
+
+                // 추천 버튼 활성화 여부 확인
+                const recommendBtn = document.getElementById('recommendBtn');
+                if (result.needs_recommendation) {
+                    recommendBtn.disabled = false;
+                    recommendBtn.textContent = '추천 시작 (준비됨)';
+                } else {
+                    recommendBtn.disabled = true;
+                    recommendBtn.textContent = '추천 시작 (정보 부족)';
+                }
+
+                // 메시지 입력창 초기화
+                document.getElementById('chatMessage').value = '';
+
+            } catch (error) {
+                showResponse('chatResponse', { error: error.message });
+            }
+        }
+
+        // 빠른 메시지 전송
+        function sendQuickMessage(message) {
+            document.getElementById('chatMessage').value = message;
+            sendMessage();
+        }
+
+        // 추천 시작
+        async function startRecommendation() {
+            if (!api.sessionId) {
+                alert('세션이 없습니다. 먼저 채팅을 시작해주세요.');
+                return;
+            }
+
+            try {
+                showLoading('recommendationResponse');
+                
+                const result = await api.startRecommendation();
+                showResponse('recommendationResponse', result);
+
+                if (result.success) {
+                    // 추천 성공 시 채팅 히스토리에 추가
+                    chatHistory.push({
+                        type: 'bot',
+                        content: { message: '추천이 완료되었습니다!', recommendation: result.recommendation },
+                        timestamp: new Date().toISOString()
+                    });
+                    updateChatHistory();
+                }
+
+            } catch (error) {
+                showResponse('recommendationResponse', { error: error.message });
+            }
+        }
+
+        // 세션 복원
+        async function restoreSession() {
+            const sessionId = prompt('복원할 세션 ID를 입력하세요:');
+            if (!sessionId) return;
+
+            try {
+                const result = await api.restoreSession(sessionId);
+                
+                if (result.exists) {
+                    api.sessionId = sessionId;
+                    document.getElementById('sessionId').value = sessionId;
+                    
+                    // 추천 버튼 상태 업데이트
+                    const recommendBtn = document.getElementById('recommendBtn');
+                    if (result.needs_recommendation) {
+                        recommendBtn.disabled = false;
+                        recommendBtn.textContent = '추천 시작 (준비됨)';
+                    }
+                }
+                
+                showResponse('sessionResponse', result);
+            } catch (error) {
+                showResponse('sessionResponse', { error: error.message });
+            }
+        }
+
+        // 세션 삭제
+        async function clearSession() {
+            if (!api.sessionId) {
+                alert('삭제할 세션이 없습니다.');
+                return;
+            }
+
+            try {
+                const result = await api.clearSession();
+                showResponse('sessionResponse', result);
+                
+                if (result.cleared) {
+                    chatHistory = [];
+                    updateChatHistory();
+                    createNewSession();
+                }
+            } catch (error) {
+                showResponse('sessionResponse', { error: error.message });
+            }
+        }
+
+        // 응답 표시
+        function showResponse(elementId, data) {
+            const element = document.getElementById(elementId);
+            element.className = 'response';
+            element.textContent = JSON.stringify(data, null, 2);
+        }
+
+        // 로딩 표시
+        function showLoading(elementId) {
+            const element = document.getElementById(elementId);
+            element.className = 'response';
+            element.innerHTML = '<div class="loading"></div> 처리 중...';
+        }
+
+        // 채팅 히스토리 업데이트
+        function updateChatHistory() {
+            const historyEl = document.getElementById('chatHistory');
+            historyEl.innerHTML = '';
+
+            chatHistory.forEach(chat => {
+                const messageEl = document.createElement('div');
+                messageEl.className = `chat-message ${chat.type}`;
+
+                const senderEl = document.createElement('div');
+                senderEl.className = 'sender';
+                senderEl.textContent = chat.type === 'user' ? '👤 사용자' : '🤖 봇';
+
+                const contentEl = document.createElement('div');
+                if (typeof chat.content === 'string') {
+                    contentEl.textContent = chat.content;
+                } else if (chat.content.message) {
+                    contentEl.textContent = chat.content.message;
+                    if (chat.content.suggestions && chat.content.suggestions.length > 0) {
+                        contentEl.textContent += '\n💡 ' + chat.content.suggestions.join(', ');
+                    }
+                } else {
+                    contentEl.textContent = JSON.stringify(chat.content, null, 2);
+                }
+
+                messageEl.appendChild(senderEl);
+                messageEl.appendChild(contentEl);
+                historyEl.appendChild(messageEl);
+            });
+
+            historyEl.scrollTop = historyEl.scrollHeight;
+        }
+
+        // Enter 키로 메시지 전송
+        document.getElementById('chatMessage').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>

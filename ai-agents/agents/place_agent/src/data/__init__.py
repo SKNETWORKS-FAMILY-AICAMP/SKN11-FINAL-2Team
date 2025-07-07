@@ -1,0 +1,1 @@
+# Place Agent 데이터 모듈

@@ -1,0 +1,26 @@
+{
+  "profile": {
+    "age": "28",
+    "gender": "남",
+    "mbti": "ISTP",
+    "address": "홍대",
+    "relationship_stage": "연인",
+    "atmosphere": "",
+    "budget": "",
+    "time_slot": "",
+    "car_owned": null,
+    "description": null,
+    "general_preferences": null,
+    "place_count": 3,
+    "profile_image_url": null
+  },
+  "location_request": {
+    "proximity_type": "exact",
+    "reference_areas": [
+      "홍대"
+    ],
+    "place_count": 3,
+    "proximity_preference": null,
+    "transportation": ""
+  }
+}
