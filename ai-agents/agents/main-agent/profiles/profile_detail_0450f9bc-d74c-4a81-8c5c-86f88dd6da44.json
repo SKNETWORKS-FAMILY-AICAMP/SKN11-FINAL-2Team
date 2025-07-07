@@ -1,0 +1,21 @@
+{
+  "profile": {
+    "age": "27",
+    "gender": "남",
+    "mbti": "ENFP",
+    "address": "용산구",
+    "relationship_stage": "연인",
+    "atmosphere": "조용한 분위기",
+    "budget": "6만원 이하",
+    "time_slot": "저녁"
+  },
+  "location_request": {
+    "proximity_type": "exact",
+    "reference_areas": [
+      "용산구"
+    ],
+    "place_count": 3,
+    "proximity_preference": null,
+    "transportation": ""
+  }
+}

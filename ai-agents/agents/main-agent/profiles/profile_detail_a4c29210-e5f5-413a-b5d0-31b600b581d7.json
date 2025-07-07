@@ -1,0 +1,15 @@
+{
+  "age": "25",
+  "gender": "남",
+  "mbti": "INTJ",
+  "address": "신촌",
+  "relationship_stage": "연인",
+  "car_owned": false,
+  "description": "조용한 카페 좋아해요",
+  "general_preferences": [
+    "조용한 곳",
+    "디저트"
+  ],
+  "place_count": 3,
+  "profile_image_url": ""
+}

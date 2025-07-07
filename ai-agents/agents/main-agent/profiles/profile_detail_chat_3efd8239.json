@@ -1,0 +1,26 @@
+{
+  "profile": {
+    "age": "28",
+    "gender": "남",
+    "mbti": "INFP",
+    "address": "홍대",
+    "relationship_stage": "친구",
+    "atmosphere": "로맨틱",
+    "budget": "10만원 이상",
+    "time_slot": "저녁",
+    "car_owned": false,
+    "description": null,
+    "general_preferences": null,
+    "place_count": 3,
+    "profile_image_url": null
+  },
+  "location_request": {
+    "proximity_type": "exact",
+    "reference_areas": [
+      "홍대"
+    ],
+    "place_count": 3,
+    "proximity_preference": null,
+    "transportation": ""
+  }
+}

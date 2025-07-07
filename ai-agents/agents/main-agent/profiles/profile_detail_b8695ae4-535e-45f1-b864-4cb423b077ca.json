@@ -1,0 +1,20 @@
+{
+  "profile": {
+    "age": "28",
+    "gender": "남",
+    "mbti": "ISTP",
+    "address": "강남",
+    "relationship_stage": "연인",
+    "atmosphere": "조용한",
+    "budget": "10만원 이하",
+    "time_slot": "저녁"
+  },
+  "location_request": {
+    "place_count": 3,
+    "proximity_type": "near",
+    "proximity_preference": "near",
+    "reference_areas": [
+      "강남역"
+    ]
+  }
+}

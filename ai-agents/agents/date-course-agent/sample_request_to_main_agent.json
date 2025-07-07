@@ -1,0 +1,193 @@
+{
+  "request_id": "date_course_20241215_123456",
+  "processing_time": "2.5초",
+  "status": "success",
+  "constraints_applied": {
+    "sunny_weather": {
+      "attempt": "1차",
+      "radius_used": 1000
+    },
+    "rainy_weather": {
+      "attempt": "1차", 
+      "radius_used": 1000
+    }
+  },
+  "results": {
+    "sunny_weather": [
+      {
+        "course_id": "sunny_course_1",
+        "places": [
+          {
+            "sequence": 1,
+            "place_info": {
+              "place_id": "place_001",
+              "name": "한강공원 반포지구",
+              "category": "야외활동",
+              "coordinates": {
+                "latitude": 37.5133,
+                "longitude": 126.9975
+              },
+              "similarity_score": 0.85
+            },
+            "description": "맑은 하늘 아래 한강에서 여유로운 데이트를 시작해보세요"
+          },
+          {
+            "sequence": 2,
+            "place_info": {
+              "place_id": "place_002",
+              "name": "스타벅스 한강공원점",
+              "category": "카페",
+              "coordinates": {
+                "latitude": 37.5145,
+                "longitude": 126.9982
+              },
+              "similarity_score": 0.78
+            },
+            "description": "공원 산책 후 따뜻한 커피 한 잔으로 마무리"
+          }
+        ],
+        "travel_info": [
+          {
+            "from": "한강공원 반포지구",
+            "to": "스타벅스 한강공원점",
+            "distance_meters": 150
+          }
+        ],
+        "total_distance_meters": 150,
+        "recommendation_reason": "맑은 날씨에 야외 활동과 카페를 조합한 로맨틱한 코스"
+      },
+      {
+        "course_id": "sunny_course_2",
+        "places": [
+          {
+            "sequence": 1,
+            "place_info": {
+              "place_id": "place_005",
+              "name": "올림픽공원",
+              "category": "야외활동",
+              "coordinates": {
+                "latitude": 37.5204,
+                "longitude": 127.1240
+              },
+              "similarity_score": 0.82
+            },
+            "description": "넓은 공원에서 산책과 운동을 즐겨보세요"
+          },
+          {
+            "sequence": 2,
+            "place_info": {
+              "place_id": "place_006",
+              "name": "송리단길 카페",
+              "category": "카페",
+              "coordinates": {
+                "latitude": 37.5210,
+                "longitude": 127.1245
+              },
+              "similarity_score": 0.75
+            },
+            "description": "트렌디한 송리단길에서 카페 투어"
+          }
+        ],
+        "travel_info": [
+          {
+            "from": "올림픽공원",
+            "to": "송리단길 카페",
+            "distance_meters": 200
+          }
+        ],
+        "total_distance_meters": 200,
+        "recommendation_reason": "공원 산책 후 핫플레이스 카페 방문 코스"
+      }
+    ],
+    "rainy_weather": [
+      {
+        "course_id": "rainy_course_1", 
+        "places": [
+          {
+            "sequence": 1,
+            "place_info": {
+              "place_id": "place_003",
+              "name": "롯데월드타워 서울스카이",
+              "category": "엔터테인먼트",
+              "coordinates": {
+                "latitude": 37.5125,
+                "longitude": 127.1025
+              },
+              "similarity_score": 0.92
+            },
+            "description": "비오는 날에도 실내에서 멋진 뷰를 감상할 수 있어요"
+          },
+          {
+            "sequence": 2,
+            "place_info": {
+              "place_id": "place_004",
+              "name": "롯데월드몰 카페거리",
+              "category": "카페",
+              "coordinates": {
+                "latitude": 37.5130,
+                "longitude": 127.1020
+              },
+              "similarity_score": 0.81
+            },
+            "description": "전망대 관람 후 쇼핑몰에서 여유로운 카페 타임"
+          }
+        ],
+        "travel_info": [
+          {
+            "from": "롯데월드타워 서울스카이",
+            "to": "롯데월드몰 카페거리", 
+            "distance_meters": 100
+          }
+        ],
+        "total_distance_meters": 100,
+        "recommendation_reason": "비가 와도 실내에서 즐길 수 있는 완벽한 데이트 코스"
+      },
+      {
+        "course_id": "rainy_course_2",
+        "places": [
+          {
+            "sequence": 1,
+            "place_info": {
+              "place_id": "place_007",
+              "name": "코엑스 아쿠아리움",
+              "category": "엔터테인먼트",
+              "coordinates": {
+                "latitude": 37.5131,
+                "longitude": 127.0590
+              },
+              "similarity_score": 0.88
+            },
+            "description": "실내 아쿠아리움에서 신비로운 바다 세계 탐험"
+          },
+          {
+            "sequence": 2,
+            "place_info": {
+              "place_id": "place_008",
+              "name": "코엑스몰 푸드코트",
+              "category": "음식점",
+              "coordinates": {
+                "latitude": 37.5135,
+                "longitude": 127.0585
+              },
+              "similarity_score": 0.76
+            },
+            "description": "다양한 음식을 맛볼 수 있는 푸드코트"
+          }
+        ],
+        "travel_info": [
+          {
+            "from": "코엑스 아쿠아리움",
+            "to": "코엑스몰 푸드코트",
+            "distance_meters": 80
+          }
+        ],
+        "total_distance_meters": 80,
+        "recommendation_reason": "실내 관광지와 식사를 함께 즐기는 비 오는 날 코스"
+      }
+    ]
+  },
+  "backup_courses": null,
+  "constraints_relaxed": null,
+  "message": null,
+  "suggestions": null
+}
