@@ -22,9 +22,9 @@ Frontend (React) ← → API Server (FastAPI) ← → AI Agents (3 Agents)
 │
 ├── ai-agents/             # AI 에이전트 시스템
 │   ├── agents/
-│   │   ├── main-agent/    # 메인 오케스트레이터 (포트 8000)
-│   │   ├── place-agent/   # 지역 분석 에이전트 (포트 8001)
-│   │   └── date-course-agent/ # 코스 생성 에이전트 (포트 8002)
+│   │   ├── main-agent/    # 메인 오케스트레이터
+│   │   ├── place-agent/   # 지역 분석 에이전트
+│   │   └── date-course-agent/ # 코스 생성 에이전트
 │   └── start_all_servers.py   # 모든 에이전트 서버 실행
 │
 └── README.md
