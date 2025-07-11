@@ -1,0 +1,3 @@
+date-course-agent/.env
+date-course-agent/data/places
+date-course-agent/data/qdrant_storage
