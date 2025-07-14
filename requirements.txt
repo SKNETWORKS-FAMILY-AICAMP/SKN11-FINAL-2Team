@@ -1,0 +1,46 @@
+# 프로젝트 의존성 패키지 목록 (로컬 파일 기반 Qdrant)
+
+# 핵심 프레임워크
+langchain==0.1.0
+langchain-openai==0.1.0
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# AI/ML 관련
+openai==1.12.0
+numpy==1.24.3
+tiktoken==0.5.2
+
+# 벡터 데이터베이스 (로컬 파일 기반!)
+qdrant-client==1.7.0
+
+# 데이터 검증 및 처리
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# 비동기 처리
+aiohttp==3.9.1
+
+# 환경변수 관리
+python-dotenv==1.0.0
+python-multipart==0.0.6
+
+# 수학 및 지리계산
+geopy==2.4.1
+
+# 로깅 및 모니터링
+loguru==0.7.2
+
+# 테스트
+pytest==7.4.3
+pytest-asyncio==0.21.1
+httpx==0.25.2
+
+# 개발 도구
+black==23.11.0
+isort==5.13.2
+flake8==6.1.0
+mypy==1.7.1
+
+# 타입 힌트
+typing-extensions==4.8.0

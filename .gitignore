@@ -1,3 +1,32 @@
-date-course-agent/.env
-date-course-agent/data/places
-date-course-agent/data/qdrant_storage
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Vector database
+data/qdrant_storage/
+
+# Log files
+*.log
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

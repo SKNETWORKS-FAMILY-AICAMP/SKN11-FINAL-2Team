@@ -1,0 +1,6 @@
+            # 4단계: 스마트 코스 조합 생성 (조합 폭발 방지 + 클러스터 기반 거리 제한)
+            combinations = self.course_optimizer.generate_combinations(
+                places=search_result.places, 
+                search_targets=search_targets  # search_targets 전달 추가!
+            )
+            logger.info(f"⚡ 조합 생성 완료 - {len(combinations)}개 (폭발 방지 + 클러스터 기반)")
