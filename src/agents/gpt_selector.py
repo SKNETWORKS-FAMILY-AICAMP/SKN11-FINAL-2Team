@@ -25,7 +25,7 @@ class SmartGPTSelector:
     
     def __init__(self):
         """초기화"""
-        self.max_combinations_for_gpt = 20  # GPT에 전달할 최대 조합 수
+        self.max_combinations_for_gpt = 10  # GPT에 전달할 최대 조합 수 (15초 최적화: 20→10)
         self.min_combinations_for_gpt = 6   # 🔥 추가: GPT에게 보낼 최소 조합 수
         
         # OpenAI 클라이언트 초기화
@@ -358,7 +358,7 @@ class SmartGPTSelector:
             
             # 조합 정보 (전체 전달 - 최대 20개)
             combinations_info = ""
-            display_count = min(len(combinations), 20)  # 최대 20개
+            display_count = min(len(combinations), 10)  # 최대 10개 (15초 최적화)
             for i, combo in enumerate(combinations[:display_count]):
                 places_info = []
                 for place in combo.get('course_sequence', []):

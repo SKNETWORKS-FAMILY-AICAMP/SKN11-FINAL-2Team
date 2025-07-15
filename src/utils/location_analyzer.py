@@ -33,8 +33,8 @@ class SmartLocationAnalyzer:
 
     def __init__(self):
         """초기화. 각종 기준값 설정"""
-        # '같은 지역'으로 판단하는 클러스터링 기준 (고정값)
-        self.CLUSTERING_THRESHOLD = 1000 # 1km
+        # '같은 지역'으로 판단하는 클러스터링 기준 (15초 최적화: 1km → 800m)
+        self.CLUSTERING_THRESHOLD = 800 # 800m
 
         # '단일 지역'일 때, 날씨별 동적 거리 기준
         self.distance_limits_by_weather = {

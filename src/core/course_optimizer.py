@@ -505,20 +505,20 @@ class SmartCourseOptimizer:
         try:
             score = 0.0
             
-            # 1. 유사도 점수 (40%)
+            # 1. 유사도 점수 (50%) - 15초 최적화: 40%→50% 증가
             similarity_scores = [place.get('similarity_score', 0.0) for place in combination]
             avg_similarity = sum(similarity_scores) / len(similarity_scores) if similarity_scores else 0
-            score += avg_similarity * 0.4
+            score += avg_similarity * 0.5
             
-            # 2. 거리 점수 (40%) - 짧을수록 좋음
+            # 2. 거리 점수 (40%) - 짧을수록 좋음 (유지)
             total_distance = self._calculate_total_distance(combination)
             # 거리를 0-1 스케일로 정규화 (10km를 기준점으로)
             distance_score = max(0, 1 - (total_distance / 10000))
             score += distance_score * 0.4
             
-            # 3. 다양성 점수 (20%) - 서로 다른 특성
+            # 3. 다양성 점수 (10%) - 15초 최적화: 20%→10% 감소
             diversity_score = self._calculate_diversity_score(combination)
-            score += diversity_score * 0.2
+            score += diversity_score * 0.1
             
             return score
             
