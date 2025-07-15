@@ -29,7 +29,7 @@ class SmartVectorSearchEngine:
         self.qdrant_client = get_qdrant_client()
         self.top_k_steps = [5, 8, 12] # 재시도 시 사용할 Top-K 값들 (더 점진적이고 효율적)
         self.radius_expansion_factor = 1.5
-        logger.info("✅ 스마트 벡터 검색 엔진 초기화 완료 (Top-K 순차 확대 전략)")
+        logger.info("✅ 스마트 벡터 검색 엔진 초기화 완료 (Top-K 순차 확대 + 클러스터별 병렬 검색)")
 
     async def search_with_retry_logic(
         self,
@@ -47,8 +47,8 @@ class SmartVectorSearchEngine:
                 attempt_name = f"{i+1}차 (Top-K={top_k})"
                 logger.info(f"▶️  {attempt_name} 검색 시작")
 
-                # location_analysis에서 결정된 동적 검색 반경을 사용
-                search_results = await self._execute_search(search_targets, embeddings, location_analysis, top_k)
+                # location_analysis에서 결정된 동적 검색 반경을 사용 (병렬 검색 적용)
+                search_results = await self._execute_search_parallel(search_targets, embeddings, location_analysis, top_k)
 
                 if self._is_search_successful(search_results, len(search_targets)):
                     logger.info(f"✅ {attempt_name} 검색 성공 - 충분한 장소 확보")
@@ -66,7 +66,7 @@ class SmartVectorSearchEngine:
             final_top_k = self.top_k_steps[1] # 반경 확대 시에는 Top-K=5로 고정
             attempt_name = f"최후 (반경 확대, Top-K={final_top_k})"
 
-            final_results = await self._execute_search(search_targets, embeddings, expanded_location_analysis, final_top_k)
+            final_results = await self._execute_search_parallel(search_targets, embeddings, expanded_location_analysis, final_top_k)
             
             radius_used = expanded_location_analysis['clusters'][0].search_radius
             logger.info(f"✅ {attempt_name} 검색 완료")
@@ -76,45 +76,117 @@ class SmartVectorSearchEngine:
             logger.error(f"❌ 스마트 벡터 검색 실패: {e}")
             return VectorSearchResult([], "실패", 0, 0)
 
-    async def _execute_search(
+    async def _execute_search_parallel(
         self,
         search_targets: List[Dict[str, Any]],
         embeddings: List[List[float]],
         location_analysis: Dict[str, Any],
         top_k: int
     ) -> List[Dict]:
-        """실제 DB 검색을 수행하는 내부 함수"""
-        all_places = []
-        clusters = location_analysis['clusters']
-
-        # 각 클러스터별로 검색 수행
-        for cluster in clusters:
-            # 클러스터에 속한 타겟들만 필터링
-            cluster_target_indices = [i for i, t in enumerate(search_targets) if self._is_target_in_cluster(t, cluster)]
-
-            for i in cluster_target_indices:
-                target = search_targets[i]
-                embedding = embeddings[i]
+        """클러스터별 병렬 검색으로 성능 최적화된 DB 검색"""
+        try:
+            all_places = []
+            clusters = location_analysis['clusters']
+            
+            # 모든 검색 작업을 병렬로 생성
+            search_tasks = []
+            task_metadata = []  # 검색 작업의 메타데이터 저장
+            
+            for cluster in clusters:
+                # 클러스터에 속한 타겟들만 필터링
+                cluster_target_indices = [i for i, t in enumerate(search_targets) if self._is_target_in_cluster(t, cluster)]
                 
-                # location_analyzer가 결정한 동적 검색 반경을 사용!
-                radius = cluster.search_radius
+                for i in cluster_target_indices:
+                    target = search_targets[i]
+                    embedding = embeddings[i]
+                    
+                    # location_analyzer가 결정한 동적 검색 반경을 사용!
+                    radius = cluster.search_radius
+                    
+                    # 각 클러스터+타겟 조합별로 검색 태스크 생성
+                    task = self.qdrant_client.search_with_geo_filter(
+                        query_vector=embedding,
+                        center_lat=cluster.center_lat,
+                        center_lon=cluster.center_lon,
+                        radius_meters=radius,
+                        category=self._get_target_info(target, 'category'),
+                        limit=top_k
+                    )
+                    search_tasks.append(task)
+                    task_metadata.append({
+                        'target': target,
+                        'sequence': self._get_target_info(target, 'sequence'),
+                        'category': self._get_target_info(target, 'category')
+                    })
+            
+            # 모든 검색을 병렬 실행 ⚡
+            logger.debug(f"🚀 {len(search_tasks)}개 검색 작업 병렬 실행")
+            search_results = await asyncio.gather(*search_tasks, return_exceptions=True)
+            
+            # 결과 처리 및 메타데이터 추가
+            for i, (search_result, metadata) in enumerate(zip(search_results, task_metadata)):
+                if isinstance(search_result, Exception):
+                    logger.error(f"❌ 검색 작업 {i+1} 실패: {search_result}")
+                    continue
+                    
+                # 메타데이터 추가
+                for result in search_result:
+                    result['search_sequence'] = metadata['sequence']
+                    result['target_category'] = metadata['category']
+                all_places.extend(search_result)
+            
+            logger.debug(f"✅ 병렬 검색 완료 (Top-K={top_k}) - 총 {len(all_places)}개 장소 발견")
+            return all_places
+            
+        except Exception as e:
+            logger.error(f"❌ 병렬 검색 실패: {e}")
+            # 폴백: 기존 순차 검색
+            return await self._execute_search_sequential(search_targets, embeddings, location_analysis, top_k)
 
-                search_results = await self.qdrant_client.search_with_geo_filter(
-                    query_vector=embedding,
-                    center_lat=cluster.center_lat,
-                    center_lon=cluster.center_lon,
-                    radius_meters=radius,
-                    category=self._get_target_info(target, 'category'),
-                    limit=top_k
-                )
+    async def _execute_search_sequential(
+        self,
+        search_targets: List[Dict[str, Any]],
+        embeddings: List[List[float]],
+        location_analysis: Dict[str, Any],
+        top_k: int
+    ) -> List[Dict]:
+        """순차 검색 (폴백용 + 기존 로직)"""
+        try:
+            all_places = []
+            clusters = location_analysis['clusters']
 
-                for result in search_results:
-                    result['search_sequence'] = self._get_target_info(target, 'sequence')
-                    result['target_category'] = self._get_target_info(target, 'category')
-                all_places.extend(search_results)
-        
-        logger.debug(f"   검색 완료 (Top-K={top_k}) - 총 {len(all_places)}개 장소 발견")
-        return all_places
+            # 각 클러스터별로 순차 검색 수행
+            for cluster in clusters:
+                # 클러스터에 속한 타겟들만 필터링
+                cluster_target_indices = [i for i, t in enumerate(search_targets) if self._is_target_in_cluster(t, cluster)]
+
+                for i in cluster_target_indices:
+                    target = search_targets[i]
+                    embedding = embeddings[i]
+                    
+                    # location_analyzer가 결정한 동적 검색 반경을 사용!
+                    radius = cluster.search_radius
+
+                    search_results = await self.qdrant_client.search_with_geo_filter(
+                        query_vector=embedding,
+                        center_lat=cluster.center_lat,
+                        center_lon=cluster.center_lon,
+                        radius_meters=radius,
+                        category=self._get_target_info(target, 'category'),
+                        limit=top_k
+                    )
+
+                    for result in search_results:
+                        result['search_sequence'] = self._get_target_info(target, 'sequence')
+                        result['target_category'] = self._get_target_info(target, 'category')
+                    all_places.extend(search_results)
+            
+            logger.debug(f"   순차 검색 완료 (Top-K={top_k}) - 총 {len(all_places)}개 장소 발견")
+            return all_places
+            
+        except Exception as e:
+            logger.error(f"❌ 순차 검색 실패: {e}")
+            return []
 
     def _is_search_successful(self, places: List[Dict], target_count: int) -> bool:
         """검색 성공 여부 판단 (각 카테고리별로 최소 2개 이상 결과 확보)"""
