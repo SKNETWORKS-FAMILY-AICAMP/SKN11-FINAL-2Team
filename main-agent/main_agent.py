@@ -22,13 +22,13 @@ class MainAgent:
         self.service = MainAgentService(openai_api_key)
         self.file_manager = FileManager()
     
-    def process_request(self, request: MainAgentRequest) -> MainAgentResponse:
+    async def process_request(self, request: MainAgentRequest) -> MainAgentResponse:
         """요청 처리 및 응답 반환"""
-        return self.service.process_request(request)
+        return await self.service.process_request(request)
     
-    def process_request_with_file_save(self, request: MainAgentRequest) -> MainAgentResponse:
+    async def process_request_with_file_save(self, request: MainAgentRequest) -> MainAgentResponse:
         """요청 처리 + 파일 저장"""
-        response = self.service.process_request(request)
+        response = await self.service.process_request(request)
         
         if response.success:
             # 파일 저장
