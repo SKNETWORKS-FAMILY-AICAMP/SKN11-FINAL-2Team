@@ -10,7 +10,7 @@ class PlaceDiversityManager:
     
     def __init__(self):
         """초기화"""
-        self.diversity_ratio = 0.7  # 70% 이상 다른 장소여야 함
+        self.diversity_ratio = 0.55  # 55% 이상 다른 장소여야 함 (다양성과 현실성의 균형)
         self.max_reuse_count = 2  # 같은 장소 최대 2번까지 사용
         logger.info("✅ 장소 다양성 관리자 초기화 완료")
     

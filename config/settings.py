@@ -36,8 +36,8 @@ class Settings:
     MAX_SINGLE_SEGMENT_DISTANCE: int = int(os.getenv("MAX_SINGLE_SEGMENT_DISTANCE", "1500"))  # 구간별 1.5km 제한
     
     # 조합 설정
-    FIRST_ATTEMPT_TOP_K: int = int(os.getenv("FIRST_ATTEMPT_TOP_K", "3"))
-    SECOND_ATTEMPT_TOP_K: int = int(os.getenv("SECOND_ATTEMPT_TOP_K", "5"))
+    FIRST_ATTEMPT_TOP_K: int = int(os.getenv("FIRST_ATTEMPT_TOP_K", "5"))
+    SECOND_ATTEMPT_TOP_K: int = int(os.getenv("SECOND_ATTEMPT_TOP_K", "8"))
     MAX_COMBINATIONS_PER_ATTEMPT: int = 100
     
     # 성능 설정

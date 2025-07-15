@@ -27,7 +27,7 @@ class SmartVectorSearchEngine:
     def __init__(self):
         """초기화"""
         self.qdrant_client = get_qdrant_client()
-        self.top_k_steps = [3, 5, 10, 15] # 재시도 시 사용할 Top-K 값들
+        self.top_k_steps = [5, 8, 12] # 재시도 시 사용할 Top-K 값들 (더 점진적이고 효율적)
         self.radius_expansion_factor = 1.5
         logger.info("✅ 스마트 벡터 검색 엔진 초기화 완료 (Top-K 순차 확대 전략)")
 
