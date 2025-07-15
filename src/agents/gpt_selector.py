@@ -317,20 +317,43 @@ class SmartGPTSelector:
         user_context: Dict[str, Any], 
         weather: str
     ) -> str:
-        """GPT용 프롬프트 생성"""
+        """GPT용 프롬프트 생성 - 완전한 개인화 정보 포함"""
         try:
-            # 사용자 정보 요약
+            # 사용자 정보 요약 (user_context 완전 전달)
             demographics = user_context.get('demographics', {})
             preferences = user_context.get('preferences', [])
             requirements = user_context.get('requirements', {})
             
-            user_info = f"""사용자 정보:
+            # course_planning 정보 추출 (새로 추가)
+            course_planning = user_context.get('course_planning', {})
+            optimization_goals = course_planning.get('optimization_goals', [])
+            route_constraints = course_planning.get('route_constraints', {})
+            sequence_optimization = course_planning.get('sequence_optimization', {})
+            
+            user_info = f"""🎯 완전한 사용자 프로필
+
+📋 기본 정보:
 - 나이: {demographics.get('age', '미상')}세
 - MBTI: {demographics.get('mbti', '미상')}
 - 관계: {demographics.get('relationship_stage', '미상')}
-- 선호도: {', '.join(preferences) if preferences else '없음'}
-- 교통수단: {requirements.get('transportation', '미상')}
+- 데이트 경험: {demographics.get('dating_experience', '보통')}
+
+💝 선호도 및 요구사항:
+- 선호도: {', '.join(preferences) if preferences else '특별한 선호 없음'}
 - 예산: {requirements.get('budget_range', '미상')}
+- 시간대: {requirements.get('time_preference', '하루 종일')}
+- 인원: {requirements.get('party_size', 2)}명
+- 교통수단: {requirements.get('transportation', '대중교통')}
+- 특별 요청: {requirements.get('special_requests', '없음')}
+
+🎪 데이트 목표 및 제약사항:
+- 최적화 목표: {', '.join(optimization_goals) if optimization_goals else '일반적인 데이트 경험'}
+- 최대 이동시간: {route_constraints.get('max_travel_time_between', 30)}분
+- 총 데이트 시간: {route_constraints.get('total_course_duration', 240)}분
+- 일정 유연성: {route_constraints.get('flexibility', 'medium')}
+- 순서 변경 허용: {'불가' if not sequence_optimization.get('allow_reordering', True) else '가능'}
+
+🌤️ 상황 정보:
 - 날씨: {'비오는 날' if weather == 'rainy' else '맑은 날'}"""
             
             # 조합 정보 (전체 전달 - 최대 20개)

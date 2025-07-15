@@ -19,7 +19,7 @@ class ParallelExecutor:
     def __init__(self):
         """초기화"""
         self.max_workers = int(os.getenv("MAX_WORKERS", "10"))
-        self.default_timeout = float(os.getenv("REQUEST_TIMEOUT", "30.0"))
+        self.default_timeout = float(os.getenv("REQUEST_TIMEOUT", "150.0"))
         self.executor = ThreadPoolExecutor(max_workers=self.max_workers)
         logger.info(f"✅ 병렬 실행기 초기화 완료 - 최대 워커: {self.max_workers}개")
     

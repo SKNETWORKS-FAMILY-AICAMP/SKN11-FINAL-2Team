@@ -149,9 +149,19 @@ class SmartWeatherProcessor:
                 location_analysis=location_analysis
             )
 
-            # 5. GPT를 통해 최종 코스 선택
+            # 5. GPT를 통해 최종 코스 선택 (완전한 개인화 정보 전달)
+            enhanced_user_context = {
+                **user_context, 
+                'course_planning': course_planning,
+                'search_metadata': {
+                    'attempt': search_result.attempt,
+                    'radius_used': search_result.radius_used,
+                    'total_places_found': len(search_result.places)
+                }
+            }
+            
             selected_courses = await self.gpt_selector.select_best_courses(
-                combinations, user_context, weather, search_result.attempt
+                combinations, enhanced_user_context, weather, search_result.attempt
             )
 
             # 6. 최종 결과 생성
@@ -207,9 +217,19 @@ class SmartWeatherProcessor:
                 location_analysis=location_analysis # 조합 시에도 위치 분석 결과 활용
             )
 
-            # 6. GPT를 통해 최종 코스 선택
+            # 6. GPT를 통해 최종 코스 선택 (완전한 개인화 정보 전달)
+            enhanced_user_context = {
+                **user_context, 
+                'course_planning': course_planning,
+                'search_metadata': {
+                    'attempt': search_result.attempt,
+                    'radius_used': search_result.radius_used,
+                    'total_places_found': len(search_result.places)
+                }
+            }
+            
             selected_courses = await self.gpt_selector.select_best_courses(
-                combinations, user_context, weather, search_result.attempt
+                combinations, enhanced_user_context, weather, search_result.attempt
             )
 
             # 7. 최종 결과 생성
