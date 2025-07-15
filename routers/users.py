@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.session import get_db
 from crud import crud_user
+from crud.crud_user import recreate_user_for_deactivated
 from schemas.user import (
     UserCreate, StatusResponse, NicknameCheckRequest, UserProfileSetup,
     UserProfileResponse, UserProfileUpdate, UserDeleteRequest
@@ -70,13 +71,27 @@ async def initial_user_setup(req: UserProfileSetup, db: AsyncSession = Depends(g
     if not verify_kakao_token(req.provider_user_id, req.access_token):
         raise HTTPException(status_code=401, detail="카카오 access token 검증 실패")
 
-    result = await crud_user.create_user_with_oauth(
-        db=db,
-        kakao_id=req.provider_user_id,
-        nickname=req.nickname,
-        email=None,
-        access_token=req.access_token
-    )
+    # 1. 카카오 ID로 기존 유저 확인
+    existing_user = await crud_user.get_user_by_kakao_id(db, req.provider_user_id)
+    
+    if existing_user and existing_user.user_status == "inactive":
+        # 탈퇴한 유저 재가입 처리 (크레딧 지급 안함)
+        result = await recreate_user_for_deactivated(
+            db=db,
+            kakao_id=req.provider_user_id,
+            nickname=req.nickname,
+            email=None,
+            access_token=req.access_token
+        )
+    else:
+        # 진짜 새 가입자 처리 (크레딧 지급함)
+        result = await crud_user.create_user_with_oauth(
+            db=db,
+            kakao_id=req.provider_user_id,
+            nickname=req.nickname,
+            email=None,
+            access_token=req.access_token
+        )
 
     return result
 

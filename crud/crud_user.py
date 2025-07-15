@@ -66,9 +66,16 @@ async def create_user_with_oauth(
         user = user_result.scalar_one_or_none()
         if user:
             if user.user_status == "inactive":
-                user.user_status = "active"
-                await db.commit()
-                await db.refresh(user)
+                # 탈퇴한 유저는 새 가입자처럼 응답하여 프론트를 닉네임 설정으로 유도
+                return {
+                    "status": "success",
+                    "is_new_user": True,  # 프론트가 닉네임 설정 페이지로 이동
+                    "user": {
+                        "user_id": user.user_id,
+                        "nickname": user.nickname,
+                        "email": user.email or ""
+                    }
+                }
 
             return {
                 "status": "success",
@@ -205,3 +212,54 @@ async def update_profile_detail(db: AsyncSession, user_id: str, profile_data: di
     if result.rowcount > 0:
         return await get_user(db, user_id)
     return None
+
+
+# 탈퇴한 유저 재가입 처리 (크레딧 지급 없음)
+async def recreate_user_for_deactivated(
+    db: AsyncSession,
+    kakao_id: str,
+    nickname: str,
+    email: str,
+    access_token: str = ""
+):
+    # 1. 카카오 ID로 기존 OAuth 정보 찾기
+    oauth_result = await db.execute(
+        select(UserOAuth).where(
+            UserOAuth.provider_user_id == kakao_id,
+            UserOAuth.provider_type == "kakao"
+        )
+    )
+    oauth_user = oauth_result.scalar_one_or_none()
+    
+    if oauth_user:
+        # 2. 기존 유저 정보 조회
+        user_result = await db.execute(select(User).where(User.user_id == oauth_user.user_id))
+        existing_user = user_result.scalar_one_or_none()
+        
+        if existing_user and existing_user.user_status == "inactive":
+            # 3. 기존 유저 정보 초기화 (탈퇴한 유저를 새 가입자처럼 만들기)
+            existing_user.nickname = nickname
+            existing_user.email = email
+            existing_user.user_status = "active"
+            existing_user.profile_detail = None
+            existing_user.couple_info = None
+            # 중요: 크레딧 지급 없음 (무한 가입 방지)
+            
+            # 4. OAuth 토큰 업데이트
+            oauth_user.access_token = access_token
+            
+            await db.commit()
+            await db.refresh(existing_user)
+            
+            return {
+                "status": "success",
+                "is_new_user": True,
+                "user": {
+                    "user_id": existing_user.user_id,
+                    "nickname": existing_user.nickname,
+                    "email": existing_user.email or ""
+                }
+            }
+    
+    # 예외 상황 처리
+    raise Exception("탈퇴한 유저를 찾을 수 없습니다.")
