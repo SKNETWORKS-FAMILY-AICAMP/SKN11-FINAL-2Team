@@ -25,9 +25,6 @@ class UserProfileSetup(BaseModel):
     nickname: str
     provider_type: str
     provider_user_id: str
-    access_token: str
-    refresh_token: str
-    token_expires_at: str
 
 class UserProfileDetail(BaseModel):
     age_range: Optional[str] = None

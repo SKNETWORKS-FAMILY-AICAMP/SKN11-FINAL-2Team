@@ -21,12 +21,12 @@ async def get_user_by_nickname(db: AsyncSession, nickname: str):
     return result.scalar_one_or_none()
 
 
-# ✅ 카카오 ID로 유저 조회 (탈퇴 유저 포함 반환)
-async def get_user_by_kakao_id(db: AsyncSession, kakao_id: str):
+# 새로운 범용 함수 추가
+async def get_user_by_provider_id(db: AsyncSession, provider_type: str, provider_user_id: str):
     result = await db.execute(
         select(UserOAuth).where(
-            UserOAuth.provider_user_id == kakao_id,
-            UserOAuth.provider_type == "kakao"
+            UserOAuth.provider_type == provider_type,
+            UserOAuth.provider_user_id == provider_user_id
         )
     )
     oauth_user = result.scalar_one_or_none()
@@ -34,6 +34,10 @@ async def get_user_by_kakao_id(db: AsyncSession, kakao_id: str):
         user_result = await db.execute(select(User).where(User.user_id == oauth_user.user_id))
         return user_result.scalar_one_or_none()
     return None
+
+# 기존 함수는 호환성을 위해 유지하되 새 함수 사용
+async def get_user_by_kakao_id(db: AsyncSession, kakao_id: str):
+    return await get_user_by_provider_id(db, "kakao", kakao_id)
 
 
 # 유저 생성
@@ -48,15 +52,15 @@ async def create_user(db: AsyncSession, user_in: UserCreate):
 # ✅ OAuth 유저 생성 (자동 복구 활성화됨)
 async def create_user_with_oauth(
     db: AsyncSession,
-    kakao_id: str,
+    provider_type: str,
+    provider_user_id: str,
     nickname: str,
-    email: str,
-    access_token: str = ""
+    email: str
 ):
     result = await db.execute(
         select(UserOAuth).where(
-            UserOAuth.provider_user_id == kakao_id,
-            UserOAuth.provider_type == "kakao"
+            UserOAuth.provider_type == provider_type,
+            UserOAuth.provider_user_id == provider_user_id
         )
     )
     oauth_user = result.scalar_one_or_none()
@@ -66,16 +70,15 @@ async def create_user_with_oauth(
         user = user_result.scalar_one_or_none()
         if user:
             if user.user_status == "inactive":
-                # 탈퇴한 유저는 새 가입자처럼 응답하여 프론트를 닉네임 설정으로 유도
-                return {
-                    "status": "success",
-                    "is_new_user": True,  # 프론트가 닉네임 설정 페이지로 이동
-                    "user": {
-                        "user_id": user.user_id,
-                        "nickname": user.nickname,
-                        "email": user.email or ""
-                    }
-                }
+                # 탈퇴한 유저 즉시 DROP & RECREATE
+                result = await recreate_user_for_deactivated(
+                    db=db,
+                    provider_type=provider_type,
+                    provider_user_id=provider_user_id, 
+                    nickname=f"복구유저_{user.user_id[:8]}",
+                    email=email or ""
+                )
+                return result
 
             return {
                 "status": "success",
@@ -98,10 +101,9 @@ async def create_user_with_oauth(
     await db.refresh(db_user)
 
     db_oauth = UserOAuth(
-        user_id=db_user.user_id,
-        provider_type="kakao",
-        provider_user_id=kakao_id,
-        access_token=access_token
+        provider_type=provider_type,
+        provider_user_id=provider_user_id,
+        user_id=db_user.user_id
     )
     db.add(db_oauth)
     await db.commit()
@@ -167,8 +169,11 @@ async def update_user_profile(db: AsyncSession, user_id: str, update_data: dict)
         if result.rowcount == 0:
             return None
         await db.commit()
+        
+        # 캐시 무효화를 위해 객체 강제 새로고침
+        await db.refresh(db_user)
 
-    return await get_user(db, user_id)
+    return db_user
 
 
 # 회원 탈퇴 (논리 삭제)
@@ -217,16 +222,16 @@ async def update_profile_detail(db: AsyncSession, user_id: str, profile_data: di
 # 탈퇴한 유저 재가입 처리 (크레딧 지급 없음)
 async def recreate_user_for_deactivated(
     db: AsyncSession,
-    kakao_id: str,
+    provider_type: str,
+    provider_user_id: str,
     nickname: str,
-    email: str,
-    access_token: str = ""
+    email: str
 ):
-    # 1. 카카오 ID로 기존 OAuth 정보 찾기
+    # 1. OAuth ID로 기존 OAuth 정보 찾기
     oauth_result = await db.execute(
         select(UserOAuth).where(
-            UserOAuth.provider_user_id == kakao_id,
-            UserOAuth.provider_type == "kakao"
+            UserOAuth.provider_type == provider_type,
+            UserOAuth.provider_user_id == provider_user_id
         )
     )
     oauth_user = oauth_result.scalar_one_or_none()
@@ -245,8 +250,7 @@ async def recreate_user_for_deactivated(
             existing_user.couple_info = None
             # 중요: 크레딧 지급 없음 (무한 가입 방지)
             
-            # 4. OAuth 토큰 업데이트
-            oauth_user.access_token = access_token
+            # 4. OAuth 정보는 그대로 유지 (토큰 제거됨)
             
             await db.commit()
             await db.refresh(existing_user)

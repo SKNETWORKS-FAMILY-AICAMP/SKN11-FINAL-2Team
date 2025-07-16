@@ -8,12 +8,13 @@ CONFIGS = {
         "api_url": "http://localhost:8000",
         "frontend_url": "http://localhost:3000",  # 프론트엔드 개발 주소
         "debug": True,
-        "database_url": "sqlite+aiosqlite:///./dev.db",
+        "database_url": os.getenv("DATABASE_URL", "postgresql+asyncpg://daytocourse_user:daytocourse_pass@localhost:5433/daytocourse"),
         "backend_host": "0.0.0.0",
         "backend_port": 8000,
         # .env 값 config에 통합!
         "kakao_rest_api_key": os.getenv("KAKAO_REST_API_KEY"),
         "kakao_redirect_uri": os.getenv("KAKAO_REDIRECT_URI"),
+        "jwt_secret": os.getenv("JWT_SECRET", "your-super-secret-jwt-key-change-in-production-2024"),
     },
     "production": {
         "api_url": "https://api.example.com",
@@ -24,6 +25,7 @@ CONFIGS = {
         "backend_port": 80,
         "kakao_rest_api_key": os.getenv("KAKAO_REST_API_KEY"),
         "kakao_redirect_uri": os.getenv("KAKAO_REDIRECT_URI"),
+        "jwt_secret": os.getenv("JWT_SECRET", "your-super-secret-jwt-key-change-in-production-2024"),
     },
 }
 
@@ -40,3 +42,4 @@ BACKEND_HOST = config["backend_host"]
 BACKEND_PORT = config["backend_port"]
 KAKAO_REST_API_KEY = config["kakao_rest_api_key"]
 KAKAO_REDIRECT_URI = config["kakao_redirect_uri"]
+JWT_SECRET = config["jwt_secret"]

@@ -23,7 +23,7 @@ CREATE TABLE user_oauth (
     user_id VARCHAR(36) NOT NULL,
     provider_type VARCHAR(20) NOT NULL,
     provider_user_id VARCHAR(255) NOT NULL,
-    access_token TEXT NOT NULL,
+    access_token TEXT,
     refresh_token TEXT,
     token_expires_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -214,7 +214,7 @@ CREATE INDEX idx_chat_sessions_status ON chat_sessions(session_status);
 CREATE INDEX idx_chat_sessions_last_activity ON chat_sessions(last_activity_at);
 
 -- 데이터 무결성을 위한 추가 제약조건
-ALTER TABLE users ADD CONSTRAINT chk_users_email_format CHECK (email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$' OR email IS NULL);
+ALTER TABLE users ADD CONSTRAINT chk_users_email_format CHECK (email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$' OR email IS NULL OR email = '');
 ALTER TABLE users ADD CONSTRAINT chk_users_user_status CHECK (user_status IN ('active', 'inactive', 'suspended', 'deleted') OR user_status IS NULL);
 
 ALTER TABLE user_oauth ADD CONSTRAINT chk_user_oauth_provider_type CHECK (provider_type IN ('kakao', 'google', 'naver', 'apple'));

@@ -8,6 +8,7 @@ from sqlalchemy.future import select
 from sqlalchemy import update
 from models.user import User
 from crud.crud_user import get_user_by_kakao_id, create_user_with_oauth
+from auth.jwt_handler import create_access_token
 
 router = APIRouter()
 
@@ -57,7 +58,7 @@ async def social_login(request: SocialLoginRequest, db: AsyncSession = Depends(g
         email = user_info.get("kakao_account", {}).get("email", "")
 
         # 3️⃣ 유저 확인 및 생성/차단
-        result = await create_user_with_oauth(db, kakao_id, nickname, email, access_token)
+        result = await create_user_with_oauth(db, "kakao", kakao_id, nickname, email)
 
         if result.get("status") == "deactivated":
             if request.force_reactivate:
@@ -73,7 +74,7 @@ async def social_login(request: SocialLoginRequest, db: AsyncSession = Depends(g
                 user = user_result.scalar_one()
 
                 return SocialLoginResponse(
-                    accessToken=f"token_{user.user_id}",
+                    accessToken=create_access_token(data={"user_id": user.user_id}),
                     user={
                         "user_id": user.user_id,
                         "nickname": user.nickname,
@@ -97,7 +98,7 @@ async def social_login(request: SocialLoginRequest, db: AsyncSession = Depends(g
 
         # 4️⃣ 정상 로그인
         return SocialLoginResponse(
-            accessToken=f"token_{result['user']['user_id']}",
+            accessToken=create_access_token(data={"user_id": result['user']['user_id']}),
             user=result["user"],
             is_new_user=result["is_new_user"]
         )

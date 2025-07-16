@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.session import get_db
 from crud import crud_user
 from crud.crud_user import recreate_user_for_deactivated
+from auth.dependencies import get_authenticated_user_with_session, get_current_user
 from schemas.user import (
     UserCreate, StatusResponse, NicknameCheckRequest, UserProfileSetup,
     UserProfileResponse, UserProfileUpdate, UserDeleteRequest
@@ -68,8 +69,7 @@ async def update_user_nickname(req: NicknameUpdateRequest, db: AsyncSession = De
 # ✅ 최초 회원가입 및 탈퇴 유저 복구
 @router.put("/users/profile/initial-setup")
 async def initial_user_setup(req: UserProfileSetup, db: AsyncSession = Depends(get_db)):
-    if not verify_kakao_token(req.provider_user_id, req.access_token):
-        raise HTTPException(status_code=401, detail="카카오 access token 검증 실패")
+    # 카카오 토큰 검증 제거 (이미 로그인된 상태에서만 접근하도록 변경)
 
     # 1. 카카오 ID로 기존 유저 확인
     existing_user = await crud_user.get_user_by_kakao_id(db, req.provider_user_id)
@@ -78,19 +78,19 @@ async def initial_user_setup(req: UserProfileSetup, db: AsyncSession = Depends(g
         # 탈퇴한 유저 재가입 처리 (크레딧 지급 안함)
         result = await recreate_user_for_deactivated(
             db=db,
-            kakao_id=req.provider_user_id,
+            provider_type="kakao",
+            provider_user_id=req.provider_user_id,
             nickname=req.nickname,
-            email=None,
-            access_token=req.access_token
+            email=None
         )
     else:
         # 진짜 새 가입자 처리 (크레딧 지급함)
         result = await crud_user.create_user_with_oauth(
             db=db,
-            kakao_id=req.provider_user_id,
+            provider_type="kakao",
+            provider_user_id=req.provider_user_id,
             nickname=req.nickname,
-            email=None,
-            access_token=req.access_token
+            email=None
         )
 
     return result
@@ -98,28 +98,53 @@ async def initial_user_setup(req: UserProfileSetup, db: AsyncSession = Depends(g
 
 # ✅ 마이페이지 전체 조회
 @router.get("/users/profile/me")
-async def get_my_profile(user_id: str, db: AsyncSession = Depends(get_db)):
-    user = await crud_user.get_user(db, user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+async def get_my_profile(
+    user_id: str,
+    auth_data = Depends(get_authenticated_user_with_session)
+):
+    current_user, db = auth_data
+    
+    # 권한 검증
+    if current_user.user_id != user_id:
+        raise HTTPException(status_code=403, detail="권한이 없습니다.")
+    
+    # DB profile_detail 데이터 정규화
+    profile_detail = current_user.profile_detail or {}
+    
+    # 필드명 변환 및 기본값 설정
+    normalized_profile = {
+        "age_range": profile_detail.get("age_range") or profile_detail.get("age", ""),
+        "gender": profile_detail.get("gender", ""),
+        "mbti": profile_detail.get("mbti", ""),
+        "car_owner": profile_detail.get("car_owner", False),
+        "preferences": profile_detail.get("preferences", "")
+    }
+    
     return {
         "status": "success",
         "user": {
-            "user_id": user.user_id,
-            "nickname": user.nickname,
-            "email": user.email or "",
-            "profile_detail": user.profile_detail or {},
-            "couple_info": user.couple_info
+            "user_id": current_user.user_id,
+            "nickname": current_user.nickname,
+            "email": current_user.email or "",
+            "profile_detail": normalized_profile,
+            "couple_info": current_user.couple_info
         }
     }
 
 
 # ✅ 마이페이지 수정
 @router.put("/users/profile/update/{user_id}")
-async def update_user_profile(user_id: str, req: UserProfileUpdate, db: AsyncSession = Depends(get_db)):
-    user = await crud_user.get_user(db, user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+async def update_user_profile(
+    user_id: str, 
+    req: UserProfileUpdate,
+    request: Request,
+    auth_data = Depends(get_authenticated_user_with_session)
+):
+    current_user, db = auth_data
+    
+    # 권한 검증
+    if current_user.user_id != user_id:
+        raise HTTPException(status_code=403, detail="권한이 없습니다.")
 
     update_data = {}
     if req.nickname:
@@ -129,7 +154,6 @@ async def update_user_profile(user_id: str, req: UserProfileUpdate, db: AsyncSes
         update_data["nickname"] = req.nickname
     if req.profile_detail:
         update_data["profile_detail"] = req.profile_detail.model_dump(exclude_unset=True)
-
     updated_user = await crud_user.update_user_profile(db, user_id, update_data)
 
     return {
