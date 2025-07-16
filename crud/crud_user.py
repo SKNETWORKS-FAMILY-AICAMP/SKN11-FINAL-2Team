@@ -1,9 +1,11 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.sql import func
-from sqlalchemy import delete, update as sqlalchemy_update
+from sqlalchemy import delete, update as sqlalchemy_update, or_
 from models.user import User
 from models.user_oauth import UserOAuth
+from models.couple import Couple
+from models.couple_request import CoupleRequest
 from schemas.user import UserCreate, UserDeleteRequest
 
 
@@ -176,12 +178,53 @@ async def update_user_profile(db: AsyncSession, user_id: str, update_data: dict)
     return db_user
 
 
+# 회원 탈퇴 시 연인 관계 자동 해제
+async def disconnect_couple_on_user_deactivation(db: AsyncSession, user_id: str):
+    """회원 탈퇴 시 연인 관계 자동 해제 + 관련 연인 신청 삭제"""
+    # 사용자 정보 조회
+    user_result = await db.execute(select(User).where(User.user_id == user_id))
+    user = user_result.scalar_one_or_none()
+    
+    if user:
+        # 1. 연인 관계 삭제
+        couple_query = select(Couple).where(
+            or_(Couple.user1_id == user_id, Couple.user2_id == user_id)
+        )
+        couple_result = await db.execute(couple_query)
+        couple = couple_result.scalar_one_or_none()
+        
+        if couple:
+            await db.delete(couple)
+            print(f"✅ 연인 관계 해제: {user_id}")
+        
+        # 2. 🔥 탈퇴 사용자와 관련된 모든 연인 신청 삭제
+        await db.execute(
+            delete(CoupleRequest).where(
+                or_(
+                    CoupleRequest.requester_id == user_id,  # 탈퇴자가 보낸 신청
+                    CoupleRequest.partner_nickname == user.nickname  # 탈퇴자가 받은 신청
+                )
+            )
+        )
+        
+        await db.commit()
+        print(f"✅ 연인 신청 기록 삭제: {user.nickname}")
+        return True
+    
+    return False
+
 # 회원 탈퇴 (논리 삭제)
 async def delete_user_with_validation(db: AsyncSession, req: UserDeleteRequest):
     user = await get_user(db, req.user_id)
     if not user or user.nickname != req.nickname:
         return None
+    
+    # 🔥 연인 관계 자동 해제
+    await disconnect_couple_on_user_deactivation(db, req.user_id)
+    
+    # 기존 사용자 탈퇴 처리
     user.user_status = "inactive"
+    user.couple_info = None  # 연인 정보 초기화
     await db.commit()
     return True
 

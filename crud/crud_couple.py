@@ -1,8 +1,9 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import or_
+from sqlalchemy import or_, delete, and_
 from models.couple import Couple
 from models.user import User
+from models.couple_request import CoupleRequest
 from schemas.couple import CoupleCreate
 from crud.crud_couple_request import cancel_accepted_request  # 연인 신청 상태 취소용
 
@@ -53,12 +54,27 @@ async def delete_couple(db: AsyncSession, couple_id: int, user_id: str):
     if not me or not partner:
         raise ValueError("사용자 정보를 찾을 수 없습니다.")
 
-    # 연인 신청 상태도 'cancelled'로 변경
-    await cancel_accepted_request(db, user_id, partner.nickname)
+    # 🔥 연인 신청 상태 변경 대신 완전 삭제
+    await db.execute(
+        delete(CoupleRequest).where(
+            or_(
+                and_(
+                    CoupleRequest.requester_id == user_id,
+                    CoupleRequest.partner_nickname == partner.nickname
+                ),
+                and_(
+                    CoupleRequest.requester_id == partner_id,
+                    CoupleRequest.partner_nickname == me.nickname
+                )
+            )
+        )
+    )
 
     # 연인 관계 삭제
     await db.delete(couple)
     await db.commit()
+    
+    print(f"✅ 연인 관계 해제 및 신청 기록 삭제 완료: {me.nickname} ↔ {partner.nickname}")
     return True
 
 # 연인 관계 존재 여부 확인
