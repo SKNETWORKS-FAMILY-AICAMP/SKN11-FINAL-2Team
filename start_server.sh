@@ -1,6 +1,10 @@
 #!/bin/bash
 
+# 스크립트 디렉토리로 이동
+cd "$(dirname "$0")"
+
 echo "🚀 DaytoCourse 백엔드 서버 시작 스크립트"
+echo "📁 현재 디렉토리: $(pwd)"
 echo ""
 
 # 1. PostgreSQL 컨테이너 확인 및 시작
@@ -8,8 +12,8 @@ echo "📦 PostgreSQL 컨테이너 상태 확인..."
 if ! docker compose ps postgres | grep -q "Up"; then
     echo "🔄 PostgreSQL 컨테이너 시작 중..."
     docker compose up -d postgres
-    echo "⏳ PostgreSQL 초기화 대기 중... (10초)"
-    sleep 10
+    echo "⏳ PostgreSQL 초기화 대기 중... (15초)"
+    sleep 15
 else
     echo "✅ PostgreSQL 이미 실행 중"
 fi
