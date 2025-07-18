@@ -7,6 +7,7 @@ import time
 import json
 import sys
 import os
+import glob
 from typing import Dict, Any, List
 from loguru import logger
 
@@ -30,6 +31,11 @@ class DateCourseAgent:
         self.weather_processor = WeatherProcessor()
         self.data_validator = DataValidator()
         self.url_generator = URLGenerator()
+        
+        # place_id -> kakao_url 매핑 딕셔너리 로드
+        logger.info("🔗 URL 매핑 딕셔너리 로드 시작")
+        self.place_url_mapping = self._load_place_url_mapping()
+        logger.info(f"✅ URL 매핑 로드 완료: {len(self.place_url_mapping)}개")
     
     async def process_request(self, request_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -243,9 +249,63 @@ class DateCourseAgent:
             logger.error(f"❗ 백업 코스 준비 실패: {e}")
             return {}
     
+    def _load_place_url_mapping(self) -> Dict[str, str]:
+        """JSON 파일들에서 place_id -> kakao_url 매핑 딕셔너리 생성"""
+        mapping = {}
+        
+        try:
+            # data/places 디렉토리 경로
+            places_dir = os.path.join(os.path.dirname(__file__), '..', 'data', 'places')
+            
+            if not os.path.exists(places_dir):
+                logger.error(f"❌ places 디렉토리를 찾을 수 없습니다: {places_dir}")
+                return mapping
+            
+            # 모든 JSON 파일 읽기
+            json_files = glob.glob(os.path.join(places_dir, '*.json'))
+            logger.info(f"📁 JSON 파일 {len(json_files)}개 발견")
+            
+            for json_file in json_files:
+                try:
+                    file_name = os.path.basename(json_file)
+                    logger.debug(f"📖 {file_name} 파일 읽는 중...")
+                    
+                    with open(json_file, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    
+                    # 각 장소의 place_id와 kakao_url 매핑
+                    file_count = 0
+                    for place in data:
+                        place_id = place.get('place_id')
+                        kakao_url = place.get('kakao_url', '')
+                        if place_id and kakao_url:
+                            mapping[place_id] = kakao_url
+                            file_count += 1
+                    
+                    logger.debug(f"✅ {file_name}: {file_count}개 매핑 완료")
+                            
+                except Exception as e:
+                    logger.warning(f"⚠️ JSON 파일 읽기 실패: {json_file} - {e}")
+                    continue
+            
+            logger.info(f"🎯 총 URL 매핑 완료: {len(mapping)}개")
+            return mapping
+            
+        except Exception as e:
+            logger.error(f"❌ URL 매핑 로드 실패: {e}")
+            return {}
+    
     def _generate_place_urls(self, place: Dict[str, Any]) -> Dict[str, str]:
         """장소 URL 생성"""
+        # 1. 먼저 벡터 DB에서 온 데이터에서 확인
         kakao_url = place.get("kakao_url", "")
+        
+        # 2. 비어있으면 매핑 딕셔너리에서 찾기
+        if not kakao_url:
+            place_id = place.get("place_id", "")
+            if place_id and hasattr(self, 'place_url_mapping') and place_id in self.place_url_mapping:
+                kakao_url = self.place_url_mapping[place_id]
+                logger.debug(f"🔗 매핑에서 URL 찾음: {place_id} -> {kakao_url}")
         
         return {
             "kakao_map": kakao_url

@@ -31,6 +31,6 @@ env/
 .DS_Store
 Thumbs.db
 
-data/places
+data/places/
 
 
