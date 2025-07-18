@@ -42,7 +42,7 @@ class Settings:
     
     # 성능 설정
     MAX_WORKERS: int = int(os.getenv("MAX_WORKERS", "10"))
-    REQUEST_TIMEOUT: float = float(os.getenv("REQUEST_TIMEOUT", "30.0"))
+    REQUEST_TIMEOUT: float = float(os.getenv("REQUEST_TIMEOUT", "120.0"))
     EMBEDDING_BATCH_SIZE: int = 10
     
     # 로깅 설정

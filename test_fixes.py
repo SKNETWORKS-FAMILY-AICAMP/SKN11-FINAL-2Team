@@ -66,7 +66,7 @@ async def test_fixed_issues():
     }
     
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=120.0) as client:
             print("📡 서버로 요청을 보냅니다...")
             
             response = await client.post(

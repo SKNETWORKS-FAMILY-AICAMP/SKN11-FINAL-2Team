@@ -93,7 +93,8 @@ class QdrantClientManager:
                     'longitude': point.payload.get('longitude'),
                     'description': point.payload.get('description'),
                     'category': point.payload.get('category'),
-                    'similarity_score': point.score
+                    'similarity_score': point.score,
+                    'kakao_url': point.payload.get('kakao_url', '')
                 }
                 results.append(result)
             

@@ -245,27 +245,12 @@ class DateCourseAgent:
     
     def _generate_place_urls(self, place: Dict[str, Any]) -> Dict[str, str]:
         """장소 URL 생성"""
-        try:
-            place_name = place.get("place_name", place.get("name", ""))
-            coordinates = place.get("coordinates", {})
-            latitude = coordinates.get("latitude", 0)
-            longitude = coordinates.get("longitude", 0)
-            place_id = place.get("place_id", "")
-            
-            if place_name and latitude and longitude:
-                return self.url_generator.generate_place_urls(
-                    place_name=place_name,
-                    latitude=latitude,
-                    longitude=longitude,
-                    place_id=place_id
-                )
-            else:
-                return {}
-                
-        except Exception as e:
-            logger.error(f"❌ 장소 URL 생성 실패: {place.get('place_name', 'Unknown')}, 오류: {str(e)}")
-            return {}
-    
+        kakao_url = place.get("kakao_url", "")
+        
+        return {
+            "kakao_map": kakao_url
+        }
+        
     def _generate_course_sharing_url(self, places: List[Dict[str, Any]]) -> str:
         """코스 공유 URL 생성"""
         try:

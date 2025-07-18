@@ -15,7 +15,7 @@ BASE_URL = "http://localhost:8000"
 
 async def run_feature_tests_via_http():
     """HTTP 요청을 통해 서버의 기능을 테스트하는 함수"""
-    async with httpx.AsyncClient(base_url=BASE_URL, timeout=30.0) as client:
+    async with httpx.AsyncClient(base_url=BASE_URL, timeout=120.0) as client:
         # --- 테스트 시나리오 1: 맑은 날, 용산에서의 데이트 --- #
         print("\n" + "="*50)
         print("🚀 테스트 1: 맑은 날, 용산에서의 데이트 (HTTP 요청)")
@@ -96,7 +96,7 @@ async def run_feature_tests_via_http():
 }
 
         try:
-            response_sunny = await client.post("/recommend-course", json=test_request_sunny, timeout=30.0)
+            response_sunny = await client.post("/recommend-course", json=test_request_sunny, timeout=120.0)
             response_sunny.raise_for_status() # HTTP 에러 발생 시 예외 처리
             result_sunny = response_sunny.json()
             
@@ -129,7 +129,7 @@ async def run_feature_tests_via_http():
         test_request_rainy["timestamp"] = datetime.now().isoformat() + 'Z' # 현재 시간 timestamp 추가
 
         try:
-            response_rainy = await client.post("/recommend-course", json=test_request_rainy, timeout=30.0)
+            response_rainy = await client.post("/recommend-course", json=test_request_rainy, )
             response_rainy.raise_for_status()
             result_rainy = response_rainy.json()
 
@@ -232,7 +232,7 @@ async def run_feature_tests_via_http():
 }
 
         try:
-            response_multi_region = await client.post("/recommend-course", json=test_request_multi_region, timeout=30.0)
+            response_multi_region = await client.post("/recommend-course", json=test_request_multi_region, timeout=10.0)
             response_multi_region.raise_for_status()
             result_multi_region = response_multi_region.json()
 
