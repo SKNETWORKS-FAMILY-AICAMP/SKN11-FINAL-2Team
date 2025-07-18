@@ -199,7 +199,11 @@ class ChatCRUD:
                 "course_data": agent_response.get('course_data')
             })
             
+            # JSON 필드 업데이트를 SQLAlchemy에 명시적으로 알리기
+            from sqlalchemy.orm.attributes import flag_modified
+            
             session.messages = messages
+            flag_modified(session, "messages")  # JSON 필드 변경 감지
             
             await db.commit()
             

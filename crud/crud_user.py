@@ -7,7 +7,16 @@ from models.user_oauth import UserOAuth
 from models.couple import Couple
 from models.couple_request import CoupleRequest
 from schemas.user import UserCreate, UserDeleteRequest
+from models.chat_session import ChatSession
+from models.course import Course
+from models.comment import Comment
+import uuid
 
+
+
+def generate_temp_nickname(kakao_name: str) -> str:
+    unique_id = str(uuid.uuid4())[:8]
+    return f"{kakao_name}_{unique_id}"
 
 # 이메일로 유저 조회
 async def get_user_by_email(db: AsyncSession, email: str):
@@ -95,7 +104,7 @@ async def create_user_with_oauth(
     # 새 유저 생성
     db_user = User(
         email=email,
-        nickname=nickname,
+        nickname=generate_temp_nickname(nickname),
         user_status="active"
     )
     db.add(db_user)
@@ -221,6 +230,14 @@ async def delete_user_with_validation(db: AsyncSession, req: UserDeleteRequest):
     
     # 🔥 연인 관계 자동 해제
     await disconnect_couple_on_user_deactivation(db, req.user_id)
+    # 채팅 세션 삭제
+    await db.execute(delete(ChatSession).where(ChatSession.user_id == req.user_id))
+
+    # 코스 삭제
+    await db.execute(delete(Course).where(Course.user_id == req.user_id))
+
+    # 댓글 삭제
+    await db.execute(delete(Comment).where(Comment.user_id == req.user_id))
     
     # 기존 사용자 탈퇴 처리
     user.user_status = "inactive"
