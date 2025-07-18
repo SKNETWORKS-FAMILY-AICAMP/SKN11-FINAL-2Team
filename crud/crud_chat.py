@@ -114,6 +114,12 @@ class ChatCRUD:
             messages = session.messages or []
             new_message_id = len(messages) + 1
             
+            def safe_message_for_db(message):
+                """DB 저장용 메시지 변환 - 버튼은 요약 텍스트로"""
+                if isinstance(message, dict) and message.get('message_type') == 'buttons':
+                    return message.get('question', '선택 옵션')
+                return message
+            
             messages.extend([
                 {
                     "message_id": new_message_id,
@@ -124,7 +130,7 @@ class ChatCRUD:
                 {
                     "message_id": new_message_id + 1,
                     "message_type": "ASSISTANT",
-                    "message_content": agent_response['response']['message'],
+                    "message_content": safe_message_for_db(agent_response['response']['message']),
                     "sent_at": datetime.now().isoformat()
                 }
             ])
@@ -189,12 +195,18 @@ class ChatCRUD:
             new_message_id = len(messages) + 1
             
             # 메시지 필드 확인 및 처리
+            def safe_message_for_db(message):
+                """DB 저장용 메시지 변환 - 버튼은 요약 텍스트로"""
+                if isinstance(message, dict) and message.get('message_type') == 'buttons':
+                    return message.get('question', '선택 옵션')
+                return message
+            
             message_content = agent_response.get('message') or agent_response.get('response', {}).get('message') or "코스 추천이 완료되었습니다!"
             
             messages.append({
                 "message_id": new_message_id,
                 "message_type": "ASSISTANT",
-                "message_content": message_content,
+                "message_content": safe_message_for_db(message_content),
                 "sent_at": datetime.now().isoformat(),
                 "course_data": agent_response.get('course_data')
             })
@@ -252,7 +264,7 @@ class ChatCRUD:
                     "expires_at": session.expires_at.isoformat() if session.expires_at else None,
                     "message_count": len(messages),
                     "has_course": any(msg.get('course_data') for msg in messages),
-                    "preview_message": last_message.get('message_content', '')[:100] if last_message else ""
+                    "preview_message": str(last_message.get('message_content', ''))[:100] if last_message else ""
                 })
             
             return session_list

@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from datetime import datetime
 
 # 사용자 프로필 스키마
@@ -39,7 +39,7 @@ class ChatRecommendationStart(BaseModel):
 
 # 채팅 응답 스키마
 class ChatResponse(BaseModel):
-    message: str
+    message: Union[str, Dict[str, Any]]
     message_type: str
     quick_replies: Optional[List[str]] = None
     processing_time: Optional[float] = None
