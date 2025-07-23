@@ -21,6 +21,7 @@ from src.models.request_models import DateCourseRequestModel
 from src.models.response_models import DateCourseResponseModel, FailedResponseModel
 from src.models.internal_models import InternalResponseModel
 from src.services.url_generator import URLGenerator
+from src.agents.place_search_agent import PlaceSearchAgent
 
 class DateCourseAgent:
     """데이트 코스 추천 서브 에이전트 메인 클래스"""
@@ -339,6 +340,12 @@ if __name__ == "__main__":
     async def recommend_course(request_data: Dict[str, Any]):
         """데이트 코스 추천 API"""
         return await agent.process_request(request_data)
+    
+    @app.post("/search-places-by-description")
+    async def search_places_by_description(request_data: Dict[str, Any]):
+        """AI 설명 기반 장소 검색 API"""
+        place_agent = PlaceSearchAgent()
+        return await place_agent.process_request(request_data)
     
     @app.get("/health")
     async def health_check():

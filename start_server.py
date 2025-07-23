@@ -15,9 +15,10 @@ sys.path.insert(0, project_root)
 
 try:
     from src.main import DateCourseAgent
-    print("✅ DateCourseAgent 임포트 성공")
+    from src.agents.place_search_agent import PlaceSearchAgent
+    print("✅ DateCourseAgent, PlaceSearchAgent 임포트 성공")
 except ImportError as e:
-    print(f"❌ DateCourseAgent 임포트 실패: {e}")
+    print(f"❌ 에이전트 임포트 실패: {e}")
     sys.exit(1)
 
 # FastAPI 앱 생성
@@ -46,6 +47,20 @@ async def recommend_course(request_data: Dict[str, Any]):
             "error": str(e),
             "status": "error",
             "message": "서버 처리 중 오류가 발생했습니다"
+        }
+
+@app.post("/search-places-by-description")
+async def search_places_by_description(request_data: Dict[str, Any]):
+    """AI 설명 기반 장소 검색 API"""
+    try:
+        place_agent = PlaceSearchAgent()
+        result = await place_agent.process_request(request_data)
+        return result
+    except Exception as e:
+        return {
+            "error": str(e),
+            "status": "error",
+            "message": "장소 검색 중 오류가 발생했습니다"
         }
 
 @app.get("/health")
