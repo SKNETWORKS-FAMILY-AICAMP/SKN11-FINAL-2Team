@@ -1,3 +1,52 @@
+# SKN11-FINAL-2Team
+- SK네트웍스 Family AI 캠프 11기 2팀 Ofcourse
+- 개발기간: 25.06.11 - 25.08.01
+
+# 목차
+
+
+
+# 팀원 소개
+### 👤 팀원
+<table>
+  <tr>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/a5dbdb16-ecc3-430a-9909-0b5dc8bbf79a" width="120" />
+    </td>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/7249aadb-96df-4a98-9af0-ca3c9038c844" width="120" />
+    </td>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/b048ec2c-193b-46d2-8d19-2d34f15a2001" width="120" />
+    </td>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/45531234-f60c-46ab-9a37-f040ffbbe177" width="120" />
+    </td>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/31560ea0-f0c6-4a43-a76a-2b46124da082" width="120" />
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <a href="https://github.com/misong-hub">백미송</a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/HybuKimo">신준희</a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/Seonh0">이선호</a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/Minor1862">정민호</a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/junoaplus">황준호</a>
+    </td>
+  </tr>
+</table>
+<br/>
+
+
 # 데이트 코스 추천 서비스
 
 AI 기반 개인화 데이트 코스 추천 플랫폼입니다. 사용자의 MBTI, 관계단계, 선호도를 분석하여 최적의 데이트 코스를 추천합니다.
