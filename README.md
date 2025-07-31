@@ -47,14 +47,15 @@
 <br/>
 
 
-# 데이트 코스 추천 서비스
+# 프로젝틑 소개
 
-AI 기반 개인화 데이트 코스 추천 플랫폼입니다. 사용자의 MBTI, 관계단계, 선호도를 분석하여 최적의 데이트 코스를 추천합니다.
+데이트 코스를 계획할 때의 번거로움과 정보 탐색의 불편함을 해결하기 위한 AI 기반 추천 서비스입니다. 사용자의 MBTI, 관계단계, 선호도를 분석하여 최적의 데이트 코스를 추천합니다.
+
 
 ## 🏗️ 시스템 아키텍처
 
 ```
-Frontend (React) ← → API Server (FastAPI) ← → AI Agents (3 Agents)
+Frontend (React) ← → API Server (FastAPI) ← → AI Services (3 Services)
                         ↓
                    Database (SQLite)
 ```
@@ -69,48 +70,45 @@ Frontend (React) ← → API Server (FastAPI) ← → AI Agents (3 Agents)
 │   ├── routers/           # API 엔드포인트
 │   └── main.py            # FastAPI 애플리케이션 진입점
 │
-├── ai-agents/             # AI 에이전트 시스템
-│   ├── agents/
-│   │   ├── main-agent/    # 메인 오케스트레이터
-│   │   ├── place-agent/   # 지역 분석 에이전트
-│   │   └── date-course-agent/ # 코스 생성 에이전트
-│   └── start_all_servers.py   # 모든 에이전트 서버 실행
+├── ai-Services/             # AI Service 시스템
+│   ├── Services/
+│   │   ├── main-Service/    # 메인 오케스트레이터
+│   │   ├── place-Service/   # 지역 분석 Service
+│   │   └── date-course-Service/ # 코스 생성 Service
+│   └── start_all_servers.py   # 모든 Service 서버 실행
 │
 └── README.md
 ```
 
 ## 🚀 주요 기능
 
-### 🤖 AI 에이전트 시스템
-- **Main Agent**: 사용자 프로필 추출 및 에이전트 오케스트레이션
-- **Place Agent**: 카카오 API 연동 지역 분석 및 좌표 제공
-- **Date-Course Agent**: Qdrant 벡터 DB 기반 개인화 코스 생성
+### 🤖 AI Service 시스템
+- **Main Service**: 사용자 프로필 추출 및 Service 오케스트레이션
+- **Place Service**: 카카오 API 연동 지역 분석 및 좌표 제공
+- **Date-Course Service**: Qdrant 벡터 DB 기반 개인화 코스 생성
 
 ### 🎯 개인화 추천
 - **MBTI 기반**: 16가지 성격 유형별 맞춤 추천
-- **관계 단계**: 연인/썸/친구별 차별화된 코스
-- **예산 고려**: low/medium/high 예산 수준별 추천
+- **관계 단계**: 연인/썸/소개팅 차별화된 코스
+- **예산 고려**: 금액대별 예산 수준별 추천
 - **날씨 대응**: 맑은 날/비오는 날 시나리오 분리
 
 ### 🔗 소셜 기능
 - **커플 시스템**: 연인 신청/수락/관리
-- **코스 공유**: 추천받은 코스 공유 및 저장
+- **코스 공유**: 추천받은 코스를 연인 또는 커뮤니티에 공유 가능
 - **댓글 시스템**: 코스에 대한 피드백 및 후기
+- **후기 및 별점**: 장소 및 코스에 대한 후기 작성 및 별점 평가
 - **카카오 로그인**: 간편한 소셜 로그인
 
 ## 🛠️ 기술 스택
 
-### 백엔드 (API)
-- **FastAPI**: 비동기 웹 프레임워크
-- **SQLAlchemy**: 비동기 ORM
-- **SQLite**: 경량 데이터베이스
-- **Pydantic**: 데이터 검증 및 직렬화
-
-### AI 에이전트
-- **OpenAI GPT-4**: 자연어 처리 및 생성
-- **Qdrant**: 벡터 데이터베이스
-- **LangChain**: AI 에이전트 프레임워크
-- **Kakao API**: 지도 및 위치 서비스
+| Backend | FastAPI, WebSocket |
+| Frontend | next.js, Tailwind |
+| AI Model | GPT-4 |
+| DB | PostgreSQL |
+| Vector DB | Qdrant |
+| Infra | Docker, RunPod, Vercel |
+| Collaboration Tool | Git, Github |
 
 ## 🔧 설치 및 실행
 
@@ -130,9 +128,9 @@ pip install -r requirements.txt
 python main.py
 ```
 
-### 3. AI 에이전트 서버 실행
+### 3. AI Service 서버 실행
 ```bash
-cd ai-agents
+cd ai-Services
 python start_all_servers.py
 ```
 
@@ -202,9 +200,9 @@ POST /courses/recommend
 
 ## 🔄 처리 플로우
 
-1. **사용자 입력** → Main Agent에서 프로필 추출
-2. **지역 분석** → Place Agent에서 좌표 및 지역 정보 제공
-3. **코스 생성** → Date-Course Agent에서 벡터 검색 기반 코스 생성
+1. **사용자 입력** → Main Service에서 프로필 추출
+2. **지역 분석** → Place Service에서 좌표 및 지역 정보 제공
+3. **코스 생성** → Date-Course Service에서 벡터 검색 기반 코스 생성
 4. **결과 반환** → 개인화된 데이트 코스 추천
 
 ## 📈 성능 특성
@@ -220,10 +218,10 @@ POST /courses/recommend
 - **세션 관리**: 사용자별 세션 격리
 - **API 키 관리**: 환경변수를 통한 보안 키 관리
 
-## 🔮 확장 계획
+## 🚀 향후 계획
 
-- **다른 도시 지원**: 부산, 대구 등 추가 지역
-- **실시간 데이터**: 날씨, 교통, 혼잡도 연동
-- **더 많은 카테고리**: 스포츠, 액티비티 등 확장
-- **모바일 앱**: React Native 기반 모바일 버전
+- **AI 서비스 고도화**: 사용자 피드백 및 데이터 분석 바탕으로 서비스 고도화
+- **서비스 지역 확장**: 경기, 부산 등 주요 지역 데이터 구축
+- **UI/UX 개선**: 채팅 UI/UX 및 로딩 속도 개선
+- **비즈니스 모델 추가**: 구독형 상품 및 제휴 광고 추가
 
