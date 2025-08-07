@@ -43,7 +43,7 @@
       <a href="https://github.com/Seonh0">이선호</a>
     </td>
     <td align="center">
-      <a href="https://github.com/Minor1862">정민호</a>
+      <a href="https://github.com/Minor-Mino">정민호</a>
     </td>
     <td align="center">
       <a href="https://github.com/junoaplus">황준호</a>
@@ -140,3 +140,6 @@
 - **UI/UX 개선**: 채팅 UI/UX 및 로딩 속도 개선
 - **비즈니스 모델 추가**: 구독형 상품 및 제휴 광고 추가
 
+---
+
+## 📖 [Wiki](https://github.com/Ofcourse-DaytoCourse/.github/wiki/1.-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8-%EA%B0%9C%EC%9A%94)
